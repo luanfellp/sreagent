@@ -1,2 +1,2 @@
 # sreagent
-Site Reability Engineer AI Agent
+SRE AI Agent
