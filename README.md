@@ -1,5 +1,4 @@
 # sreagent
-<<<<<<< HEAD
 
 SRE incident copilot built with Python and FastAPI.
 
@@ -193,5 +192,3 @@ Example `llm_analysis` block:
 - Prometheus, Loki, Kubernetes, and Slack are represented by read-only mock interfaces only.
 - The project still runs locally without any external credentials because the LLM layer safely falls back to mock behavior.
 =======
-SRE AI Agent
->>>>>>> f6fbd2622345eea046f8b40baf5d69bade276af8
