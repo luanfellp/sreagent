@@ -1,0 +1,163 @@
+Metadata-Version: 2.4
+Name: sreagent
+Version: 0.1.0
+Summary: SRE alert processing API skeleton
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: openai<2.0,>=1.0
+Requires-Dist: uvicorn<1.0,>=0.30
+Requires-Dist: pydantic<3.0,>=2.7
+Provides-Extra: dev
+Requires-Dist: pytest<9.0,>=8.0; extra == "dev"
+Requires-Dist: httpx<1.0,>=0.27; extra == "dev"
+
+# sreagent
+
+SRE incident copilot built with Python and FastAPI.
+
+## Goal
+Receive incident alerts, enrich context, correlate signals, and generate a structured response for on-call engineers.
+
+## Scope v1
+- HTTP alert intake
+- Structured incident summary
+- Deterministic correlation rules
+- Mocked integrations
+- Read-only mode
+
+## Stack
+- Python
+- FastAPI
+- Pytest
+
+## Setup
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+```
+
+## Configuration
+Environment variables are optional unless you want to protect the alert endpoint.
+
+```bash
+export SREAGENT_API_TOKEN="change-me"
+export SREAGENT_READ_ONLY_MODE=true
+export SREAGENT_ENABLE_LLM=false
+export SREAGENT_LLM_PROVIDER=openai
+export SREAGENT_OPENAI_API_KEY=""
+export SREAGENT_OPENAI_MODEL=gpt-5
+export SREAGENT_LLM_TIMEOUT_SECONDS=15
+```
+
+When `SREAGENT_API_TOKEN` is set, `POST /alerts` requires the header `X-API-Token`.
+
+## Optional LLM layer
+The project now supports an optional LLM analysis layer after deterministic correlation.
+
+Pipeline:
+
+- alert input
+- enrichment
+- correlation
+- optional LLM analysis
+- final summarization
+
+Important constraints:
+
+- the system remains read-only
+- deterministic correlation remains the base layer
+- the LLM is advisory and cannot replace collected evidence
+- if the LLM is disabled or unavailable, the system falls back to a mock provider
+
+### Provider behavior
+- `SREAGENT_ENABLE_LLM=false`: use mock provider
+- `SREAGENT_ENABLE_LLM=true` and missing `SREAGENT_OPENAI_API_KEY`: use mock provider with safe fallback
+- `SREAGENT_ENABLE_LLM=true` and valid OpenAI config: use the OpenAI provider
+
+### Example `.env`
+```bash
+SREAGENT_API_TOKEN=change-me
+SREAGENT_READ_ONLY_MODE=true
+SREAGENT_ENABLE_LLM=true
+SREAGENT_LLM_PROVIDER=openai
+SREAGENT_OPENAI_API_KEY=sk-example
+SREAGENT_OPENAI_MODEL=gpt-5
+SREAGENT_LLM_TIMEOUT_SECONDS=15
+```
+
+## Run
+```bash
+uvicorn app.main:app --reload
+```
+
+## Test
+```bash
+pytest
+```
+
+## Example request
+```bash
+curl -X POST http://127.0.0.1:8000/alerts \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: change-me" \
+  -d '{
+    "source": "grafana",
+    "severity": "critical",
+    "message": "Checkout latency is above threshold.",
+    "labels": {
+      "service": "checkout",
+      "environment": "prod"
+    }
+  }'
+```
+
+If you did not configure `SREAGENT_API_TOKEN`, remove the `X-API-Token` header.
+
+## Response shape
+`POST /alerts` returns a read-only incident assessment with:
+
+- normalized alert data
+- structured evidence from Prometheus, Loki, and Kubernetes mocks
+- deterministic signals such as recent deploy, dominant error, restart, and crashloop
+- correlation rule, confidence, and evidence-backed hypotheses
+- optional LLM-backed refinement with structured output and safe fallback to mock
+- notification preview for Slack
+
+Example `llm_analysis` block:
+
+```json
+{
+  "summary": "Deterministic correlation points to rule crashloop-detected for service checkout in prod.",
+  "hypotheses_refined": [
+    {
+      "title": "The workload for checkout is crash looping and unstable.",
+      "confidence": 0.85,
+      "evidence_ids": ["kubernetes-workload-status"],
+      "rationale": "This refinement mirrors the deterministic correlation and does not add new facts beyond the collected evidence."
+    }
+  ],
+  "next_steps": [
+    "Inspect restart reasons and pod events for the failing workload.",
+    "Validate the correlated signals against dashboards and logs."
+  ],
+  "confidence_notes": [
+    "Mock LLM provider in use; output is a deterministic refinement layer."
+  ]
+}
+```
+
+## Architecture notes
+- FastAPI dependencies are used to inject providers, which makes it easier to swap mocks for real APIs later.
+- External systems are represented by typed interfaces and mock adapters.
+- Correlation remains deterministic and is still the primary reasoning layer.
+- The LLM receives only structured context: normalized alert, signals, correlation output, summarized evidence, and deterministic hypotheses.
+- The OpenAI integration is isolated in its own provider and uses a mock fallback when disabled, misconfigured, or unavailable.
+- The system validates LLM `evidence_ids` before returning the final response.
+
+## Current behavior
+- `GET /health` returns API health status.
+- `POST /alerts` normalizes the payload, gathers structured mock evidence, applies deterministic correlation rules, optionally refines the result with an LLM provider, and returns a structured JSON response.
+- Prometheus, Loki, Kubernetes, and Slack are represented by read-only mock interfaces only.
+- The project still runs locally without any external credentials because the LLM layer safely falls back to mock behavior.
