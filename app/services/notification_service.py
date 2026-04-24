@@ -38,6 +38,13 @@ class NotificationService:
             logger.info("notification.skipped_without_preview")
             return False
 
+        if result.notifications[0].channel != "telegram":
+            logger.warning(
+                "notification.skipped_unsupported_preview_channel",
+                extra={"channel": result.notifications[0].channel},
+            )
+            return False
+
         if (
             source == "alertmanager"
             and labels.get("alertname") == "TelegramSendFailure"

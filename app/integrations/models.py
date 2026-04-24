@@ -34,6 +34,6 @@ class KubernetesWorkloadStatus(BaseModel):
     pod_status: str | None = None
 
 
-class SlackMessagePreview(BaseModel):
-    channel: Literal["slack"]
+class NotificationMessagePreview(BaseModel):
+    channel: Literal["telegram"]
     message: str

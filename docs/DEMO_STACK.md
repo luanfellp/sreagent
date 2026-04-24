@@ -17,7 +17,7 @@ cp deploy/.env.example deploy/.env
 docker compose -f deploy/docker-compose.local.yml up -d --build
 ```
 
-Telegram is optional. If `SREAGENT_TELEGRAM_CHAT_ID` is empty, the demo still works and the API still returns notification previews.
+Telegram is optional. If `SREAGENT_TELEGRAM_CHAT_ID` is empty, the demo still works and the API still returns Telegram-formatted notification previews.
 
 ## Available scenarios
 
@@ -57,7 +57,7 @@ bash deploy/run_demo_scenarios.sh
 2. Promtail ships those logs to Loki with labels such as `service`, `environment`, and `log_source=application`.
 3. Prometheus evaluates latency, 5xx, deploy, and restart rules.
 4. Alertmanager sends grouped webhook payloads to SREAgent.
-5. SREAgent groups alerts, queries Prometheus and Loki, and builds a read-only assessment.
+5. SREAgent groups alerts by service, environment, alert name, severity, and status; then queries Prometheus and Loki to build a read-only assessment.
 6. The response highlights evidence collected, probable hypothesis, information gaps, suggested next steps, and actions not executed.
 7. Telegram delivery is attempted only when configured and never blocks the API path.
 

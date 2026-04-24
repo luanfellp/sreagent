@@ -8,9 +8,9 @@ from app.dependencies import (
     get_kubernetes_client,
     get_llm_provider,
     get_loki_client,
+    get_notification_preview_builder,
     get_notification_service,
     get_prometheus_client,
-    get_slack_client,
     require_api_token,
 )
 from app.domain.incident_models import IncidentContext
@@ -27,8 +27,8 @@ from app.domain.models import (
 from app.integrations.interfaces import (
     KubernetesClient,
     LokiClient,
+    NotificationPreviewBuilder,
     PrometheusClient,
-    SlackClient,
 )
 from app.services.alertmanager import AlertmanagerGroupInput, build_grouped_alert_inputs
 from app.services.incident_pipeline import analyze_alert
@@ -58,11 +58,11 @@ def _analyze_alert(
 
 def _summarize_alert(
     incident: IncidentContext,
-    slack_client: SlackClient,
+    notification_preview_builder: NotificationPreviewBuilder,
 ) -> AlertResponse:
     return summarize_alert(
         incident,
-        slack_client,
+        notification_preview_builder,
         non_executed_actions=READ_ONLY_NON_EXECUTED_ACTIONS,
     )
 
@@ -177,7 +177,9 @@ def create_alert(
     prometheus_client: Annotated[PrometheusClient, Depends(get_prometheus_client)],
     loki_client: Annotated[LokiClient, Depends(get_loki_client)],
     kubernetes_client: Annotated[KubernetesClient, Depends(get_kubernetes_client)],
-    slack_client: Annotated[SlackClient, Depends(get_slack_client)],
+    notification_preview_builder: Annotated[
+        NotificationPreviewBuilder, Depends(get_notification_preview_builder)
+    ],
     llm_provider: Annotated[BaseLLMProvider, Depends(get_llm_provider)],
     notification_service: Annotated[
         NotificationService, Depends(get_notification_service)
@@ -186,7 +188,7 @@ def create_alert(
     incident = _analyze_alert(
         alert, llm_provider, prometheus_client, loki_client, kubernetes_client
     )
-    result = _summarize_alert(incident, slack_client)
+    result = _summarize_alert(incident, notification_preview_builder)
     notification_service.schedule_alert_delivery(
         background_tasks,
         source=alert.source,
@@ -208,7 +210,9 @@ def create_alert_from_alertmanager(
     prometheus_client: Annotated[PrometheusClient, Depends(get_prometheus_client)],
     loki_client: Annotated[LokiClient, Depends(get_loki_client)],
     kubernetes_client: Annotated[KubernetesClient, Depends(get_kubernetes_client)],
-    slack_client: Annotated[SlackClient, Depends(get_slack_client)],
+    notification_preview_builder: Annotated[
+        NotificationPreviewBuilder, Depends(get_notification_preview_builder)
+    ],
     llm_provider: Annotated[BaseLLMProvider, Depends(get_llm_provider)],
     settings: Annotated[Settings, Depends(get_settings)],
     notification_service: Annotated[
@@ -217,7 +221,7 @@ def create_alert_from_alertmanager(
 ) -> AlertmanagerWebhookResponse:
     """
     Accept Alertmanager webhook payloads and process grouped alerts by
-    service/environment/severity/status.
+    service/environment/alertname/severity/status.
     """
     results: list[AlertResponse] = []
     for group in build_grouped_alert_inputs(payload):
@@ -237,7 +241,7 @@ def create_alert_from_alertmanager(
             loki_client,
             kubernetes_client,
         )
-        result = _summarize_alert(incident, slack_client)
+        result = _summarize_alert(incident, notification_preview_builder)
         results.append(result)
         notification_service.schedule_alert_delivery(
             background_tasks,

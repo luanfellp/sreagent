@@ -99,7 +99,7 @@ class IncidentDiagnosis(BaseModel):
 
 
 class NotificationPreview(BaseModel):
-    channel: Literal["slack"]
+    channel: Literal["telegram"]
     message: str
 
 

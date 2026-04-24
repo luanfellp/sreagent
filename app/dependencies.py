@@ -10,14 +10,14 @@ from app.core.settings import Settings, get_settings
 from app.integrations.interfaces import (
     KubernetesClient,
     LokiClient,
+    NotificationPreviewBuilder,
     PrometheusClient,
-    SlackClient,
 )
 from app.integrations.mocks import (
     mock_kubernetes,
     mock_loki,
+    mock_notification_preview_builder,
     mock_prometheus,
-    mock_slack,
 )
 from app.notifications.telegram import TelegramNotifier
 from app.services.notification_service import NotificationService
@@ -86,8 +86,8 @@ def get_kubernetes_client() -> KubernetesClient:
     return mock_kubernetes
 
 
-def get_slack_client() -> SlackClient:
-    return mock_slack
+def get_notification_preview_builder() -> NotificationPreviewBuilder:
+    return mock_notification_preview_builder
 
 
 def build_telegram_notifier(settings: Settings) -> TelegramNotifier:

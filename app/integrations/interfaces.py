@@ -3,8 +3,8 @@ from typing import Protocol
 from app.integrations.models import (
     KubernetesWorkloadStatus,
     LokiErrorSummary,
+    NotificationMessagePreview,
     PrometheusSnapshot,
-    SlackMessagePreview,
 )
 
 
@@ -26,7 +26,7 @@ class KubernetesClient(Protocol):
     ) -> KubernetesWorkloadStatus: ...
 
 
-class SlackClient(Protocol):
+class NotificationPreviewBuilder(Protocol):
     def build_notification_preview(
         self, title: str, summary: str
-    ) -> SlackMessagePreview: ...
+    ) -> NotificationMessagePreview: ...

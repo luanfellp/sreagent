@@ -66,7 +66,7 @@ Alert Input / Alertmanager
  Optional LLM Refinement
           |
           v
- Read-only Summary + Notification Preview
+ Read-only Summary + Telegram Preview
 ```
 
 ## Repository Structure
@@ -129,7 +129,7 @@ What you get:
 2. Trigger a scenario in the fake service.
 3. Prometheus evaluates alerts.
 4. Alertmanager sends grouped webhook payloads.
-5. SREAgent groups alerts by `service` / `environment` / `severity` / `status`.
+5. SREAgent groups alerts by `service` / `environment` / `alertname` / `severity` / `status`.
 6. SREAgent collects evidence from Prometheus, Loki, and workload metadata.
 7. Correlation scoring produces a primary hypothesis, confidence, secondary signals, and information gaps.
 8. The response highlights evidence collected, probable hypothesis, suggested next steps, and actions not executed.
@@ -253,7 +253,7 @@ Run lint and tests:
 ```bash
 ruff check .
 pytest
-pytest -m e2e
+pytest -o addopts='' -m e2e
 ```
 
 ## Validation Commands

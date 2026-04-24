@@ -45,7 +45,7 @@ def _shared_mapping(alerts: list[dict], field: str) -> dict[str, str]:
     return shared
 
 
-def _group_key(payload: dict, alert: dict) -> tuple[str, str, str, str]:
+def _group_key(payload: dict, alert: dict) -> tuple[str, str, str, str, str]:
     common_labels = payload.get("commonLabels") or {}
     labels = alert.get("labels", {}) or {}
 
@@ -53,22 +53,25 @@ def _group_key(payload: dict, alert: dict) -> tuple[str, str, str, str]:
     environment = str(
         labels.get("environment") or common_labels.get("environment") or "unknown"
     )
+    alert_name = str(
+        labels.get("alertname") or common_labels.get("alertname") or "unknown-alert"
+    )
     severity = _normalize_severity(
         labels.get("severity") or common_labels.get("severity") or "critical"
     )
     status = str(alert.get("status") or payload.get("status") or "firing").strip().lower()
-    return service, environment, severity, status
+    return service, environment, alert_name, severity, status
 
 
 def build_grouped_alert_inputs(payload: dict) -> list[AlertmanagerGroupInput]:
     alerts = payload.get("alerts") or [payload]
-    grouped: dict[tuple[str, str, str, str], list[dict]] = {}
+    grouped: dict[tuple[str, str, str, str, str], list[dict]] = {}
     for alert in alerts:
         key = _group_key(payload, alert)
         grouped.setdefault(key, []).append(alert)
 
     groups: list[AlertmanagerGroupInput] = []
-    for (service, environment, severity, status), group_alerts in grouped.items():
+    for (service, environment, alert_name, severity, status), group_alerts in grouped.items():
         common_labels = payload.get("commonLabels") or {}
         common_annotations = payload.get("commonAnnotations") or {}
 
@@ -97,6 +100,7 @@ def build_grouped_alert_inputs(payload: dict) -> list[AlertmanagerGroupInput]:
             {
                 "service": service,
                 "environment": environment,
+                "alertname": alert_name,
                 "severity": severity,
                 "alertmanager_status": status,
                 "alert_count": str(len(group_alerts)),
@@ -133,6 +137,7 @@ def build_grouped_alert_inputs(payload: dict) -> list[AlertmanagerGroupInput]:
         key=lambda group: (
             group.alert.labels.get("service", "unknown"),
             group.alert.labels.get("environment", "unknown"),
+            group.alert.labels.get("alertname", "unknown-alert"),
             -SEVERITY_RANK.get(group.alert.severity, 0),
             group.status,
         ),

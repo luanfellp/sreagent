@@ -1,8 +1,8 @@
 from app.integrations.models import (
     KubernetesWorkloadStatus,
     LokiErrorSummary,
+    NotificationMessagePreview,
     PrometheusSnapshot,
-    SlackMessagePreview,
 )
 
 
@@ -57,16 +57,17 @@ class MockKubernetesClient:
         )
 
 
-class MockSlackClient:
+class MockNotificationPreviewBuilder:
     def build_notification_preview(
         self, title: str, summary: str
-    ) -> SlackMessagePreview:
-        return SlackMessagePreview(
-            channel="slack", message=f"🛡️ [SOMENTE LEITURA] {title}\n\n{summary}"
+    ) -> NotificationMessagePreview:
+        return NotificationMessagePreview(
+            channel="telegram",
+            message=f"🛡️ [SOMENTE LEITURA] {title}\n\n{summary}",
         )
 
 
 mock_prometheus = MockPrometheusClient()
 mock_loki = MockLokiClient()
 mock_kubernetes = MockKubernetesClient()
-mock_slack = MockSlackClient()
+mock_notification_preview_builder = MockNotificationPreviewBuilder()

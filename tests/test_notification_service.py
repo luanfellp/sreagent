@@ -62,7 +62,7 @@ def _alert_response() -> AlertResponse:
         ),
         actions=[],
         non_executed_actions=[],
-        notifications=[NotificationPreview(channel="slack", message="mensagem")],
+        notifications=[NotificationPreview(channel="telegram", message="mensagem")],
     )
 
 

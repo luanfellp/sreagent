@@ -1,7 +1,7 @@
 from app.domain.incident_models import IncidentContext
 from app.domain.models import AlertResponse, NotificationPreview
-from app.integrations.interfaces import SlackClient
-from app.integrations.mocks import mock_slack
+from app.integrations.interfaces import NotificationPreviewBuilder
+from app.integrations.mocks import mock_notification_preview_builder
 
 SEVERITY_EMOJI = {
     "critical": "🔴",
@@ -55,7 +55,7 @@ def _ordered_unique(items: list[str]) -> list[str]:
 
 def summarize_alert(
     incident: IncidentContext,
-    slack_client: SlackClient = mock_slack,
+    notification_preview_builder: NotificationPreviewBuilder = mock_notification_preview_builder,
     non_executed_actions: list[str] | None = None,
 ) -> AlertResponse:
     severity = incident.alert.severity.lower()
@@ -124,7 +124,7 @@ def summarize_alert(
     ]
     summary = "\n".join(executive_lines)
 
-    notification = slack_client.build_notification_preview(title, summary)
+    notification = notification_preview_builder.build_notification_preview(title, summary)
     return AlertResponse(
         mode="read-only",
         status=status,

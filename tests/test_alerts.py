@@ -79,7 +79,7 @@ def test_create_alert_returns_structured_response() -> None:
         "Provedor LLM mock" in note
         for note in payload["llm_analysis"]["confidence_notes"]
     )
-    assert payload["notifications"][0]["channel"] == "slack"
+    assert payload["notifications"][0]["channel"] == "telegram"
     assert payload["notifications"][0]["message"].startswith(
         "🛡️ [SOMENTE LEITURA]"
     )
