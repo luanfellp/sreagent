@@ -12,6 +12,9 @@ class PrometheusHTTPClient:
         self.p95_metric = p95_metric
         self._client = httpx.Client(timeout=timeout)
 
+    def close(self) -> None:
+        self._client.close()
+
     def _query(self, expr: str) -> float:
         encoded = urllib.parse.quote_plus(expr)
         url = f"{self.base_url}/api/v1/query?query={encoded}"

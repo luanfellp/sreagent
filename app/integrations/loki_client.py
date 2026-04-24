@@ -12,6 +12,9 @@ class LokiHTTPClient:
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(timeout=timeout)
 
+    def close(self) -> None:
+        self._client.close()
+
     @staticmethod
     def _detect_dominant_error(lines: list[str]) -> str | None:
         joined = " ".join(line.lower() for line in lines)

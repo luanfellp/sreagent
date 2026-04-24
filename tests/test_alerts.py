@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.api.alerts as alerts_api
 from app.core.settings import Settings, get_settings
 from app.main import app
 
@@ -199,3 +200,124 @@ def test_alertmanager_warning_is_normalized_to_medium() -> None:
     payload = response.json()
     assert payload["alert"]["severity"] == "medium"
     assert payload["alert"]["source"] == "alertmanager"
+
+
+def test_alertmanager_resolved_group_is_acknowledged_without_analysis() -> None:
+    response = client.post(
+        "/alerts/alertmanager",
+        json={
+            "receiver": "sreagent-webhook",
+            "status": "resolved",
+            "alerts": [
+                {
+                    "status": "resolved",
+                    "labels": {
+                        "alertname": "High5xxRate",
+                        "severity": "critical",
+                        "service": "checkout",
+                        "environment": "prod",
+                    },
+                    "annotations": {
+                        "summary": "Taxa de 5xx normalizada",
+                    },
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "resolved"
+    assert payload["correlation"]["rule"] == "alertmanager-resolved"
+    assert payload["notifications"] == []
+    assert payload["evidence"] == []
+    assert "nenhuma nova analise foi executada" in payload["llm_analysis"]["summary"]
+
+
+def test_alertmanager_group_uses_common_context_instead_of_first_alert_only() -> None:
+    response = client.post(
+        "/alerts/alertmanager",
+        json={
+            "receiver": "sreagent-webhook",
+            "status": "firing",
+            "commonLabels": {
+                "alertname": "High5xxRate",
+                "severity": "critical",
+                "service": "checkout",
+                "environment": "prod",
+            },
+            "commonAnnotations": {
+                "summary": "Problema agrupado no checkout",
+            },
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "High5xxRate",
+                        "severity": "critical",
+                        "service": "checkout",
+                        "environment": "prod",
+                        "instance": "pod-a",
+                    },
+                    "annotations": {
+                        "summary": "Problema agrupado no checkout",
+                    },
+                },
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "High5xxRate",
+                        "severity": "critical",
+                        "service": "checkout",
+                        "environment": "prod",
+                        "instance": "pod-b",
+                    },
+                    "annotations": {
+                        "summary": "Problema agrupado no checkout",
+                    },
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["alert"]["labels"]["alert_count"] == "2"
+    assert payload["alert"]["message"].endswith("(2 alerts grouped by Alertmanager)")
+
+
+def test_alertmanager_telegram_failure_does_not_reenter_telegram_channel(monkeypatch) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    def _fake_send(bot: str, chat: str, text: str, attempts: int = 3, backoff: float = 1.0) -> bool:
+        calls.append((bot, chat, text))
+        return True
+
+    monkeypatch.setenv("SREAGENT_TELEGRAM_BOT_TOKEN", "bot-token")
+    monkeypatch.setenv("SREAGENT_TELEGRAM_CHAT_ID", "chat-id")
+    monkeypatch.setattr(alerts_api, "_send_telegram_with_retry", _fake_send)
+
+    response = client.post(
+        "/alerts/alertmanager",
+        json={
+            "receiver": "sreagent-webhook",
+            "status": "firing",
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "TelegramSendFailure",
+                        "severity": "warning",
+                        "service": "sreagent",
+                        "environment": "prod",
+                    },
+                    "annotations": {
+                        "summary": "Falha no envio Telegram",
+                    },
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls == []

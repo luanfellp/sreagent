@@ -1,5 +1,10 @@
 import time
+
+import pytest
 import requests
+
+
+pytestmark = pytest.mark.e2e
 
 ALERTMANAGER_SAMPLE = {
     "receiver": "sreagent-webhook",

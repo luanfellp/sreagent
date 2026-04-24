@@ -1,0 +1,11 @@
+exclude .env
+exclude deploy/.env
+exclude sample.env
+prune .git
+prune .github
+prune .venv
+prune .pytest_cache
+prune deploy/secrets
+prune workspace
+global-exclude __pycache__
+global-exclude *.py[cod]
