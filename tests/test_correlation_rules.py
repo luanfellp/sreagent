@@ -20,9 +20,15 @@ def test_recent_deploy_generates_kubernetes_backed_hypothesis() -> None:
     correlation = correlate_alert(enriched)
 
     assert enriched.signals.recent_deploy is True
-    assert correlation.correlation.rule == "recent-deploy-detected"
+    assert correlation.correlation.rule == "recent-deploy-regression"
+    assert correlation.correlation.primary_hypothesis.startswith(
+        "Um deploy recente"
+    )
     assert correlation.hypotheses[0].confidence == "medium"
-    assert correlation.hypotheses[0].evidence_ids == ["kubernetes-workload-status"]
+    assert correlation.hypotheses[0].evidence_ids == [
+        "kubernetes-workload-status",
+        "prometheus-service-health",
+    ]
     kubernetes_evidence = next(
         item for item in enriched.evidence if item.id == "kubernetes-workload-status"
     )
@@ -46,13 +52,13 @@ def test_dominant_error_generates_loki_backed_hypothesis() -> None:
     correlation = correlate_alert(enriched)
 
     assert enriched.signals.dominant_error == "timeout"
-    hypothesis = next(
-        item
-        for item in correlation.hypotheses
-        if "dominant error pattern" in item.statement.lower()
-    )
+    assert correlation.correlation.rule == "timeout-pattern"
+    hypothesis = correlation.hypotheses[0]
     assert hypothesis.confidence == "high"
-    assert hypothesis.evidence_ids == ["loki-error-summary"]
+    assert hypothesis.evidence_ids == [
+        "loki-error-summary",
+        "prometheus-service-health",
+    ]
     loki_evidence = next(
         item for item in enriched.evidence if item.id == "loki-error-summary"
     )
@@ -79,11 +85,10 @@ def test_crashloop_generates_high_confidence_hypothesis() -> None:
     assert enriched.signals.restart_detected is True
     assert enriched.signals.crashloop_detected is True
     assert correlation.correlation.rule == "crashloop-detected"
-    hypothesis = next(
-        item
-        for item in correlation.hypotheses
-        if "crash looping" in item.statement.lower()
-    )
+    assert correlation.correlation.supporting_evidence_ids == [
+        "kubernetes-workload-status"
+    ]
+    hypothesis = correlation.hypotheses[0]
     assert hypothesis.confidence == "high"
     assert hypothesis.evidence_ids == ["kubernetes-workload-status"]
     kubernetes_evidence = next(

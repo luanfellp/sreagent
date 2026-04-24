@@ -5,8 +5,8 @@ from app.domain.llm_models import (
     LLMContextCorrelation,
     LLMContextEvidence,
     LLMContextHypothesis,
-    LLMIncidentContext,
     LLMContextSignals,
+    LLMIncidentContext,
 )
 
 

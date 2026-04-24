@@ -10,7 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request
-from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Gauge, Histogram, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 app = Flask(__name__)
 registry = CollectorRegistry()

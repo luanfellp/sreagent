@@ -1,9 +1,8 @@
 from fastapi.testclient import TestClient
 
-import app.api.alerts as alerts_api
 from app.core.settings import Settings, get_settings
 from app.main import app
-
+from app.services.notification_service import NotificationService
 
 client = TestClient(app)
 
@@ -33,10 +32,19 @@ def test_create_alert_returns_structured_response() -> None:
         "dominant_error": None,
         "restart_detected": False,
         "crashloop_detected": False,
+        "high_error_rate": True,
+        "latency_elevated": True,
+        "relevant_logs_found": True,
     }
     assert payload["correlation"]["dedup_key"] == "checkout:prod:critical"
-    assert payload["correlation"]["rule"] == "critical-service-alert"
+    assert payload["correlation"]["rule"] == "service-degradation"
     assert payload["correlation"]["confidence"] == "medium"
+    assert payload["correlation"]["primary_hypothesis"]
+    assert payload["correlation"]["supporting_evidence_ids"] == [
+        "prometheus-service-health",
+        "loki-error-summary",
+        "kubernetes-workload-status",
+    ]
     assert payload["diagnosis"] == {
         "probable_component": "checkout",
         "probable_failure_type": "service-degradation",
@@ -72,11 +80,19 @@ def test_create_alert_returns_structured_response() -> None:
         for note in payload["llm_analysis"]["confidence_notes"]
     )
     assert payload["notifications"][0]["channel"] == "slack"
-    assert payload["notifications"][0]["message"].startswith("🛡️ [SOMENTE LEITURA]")
+    assert payload["notifications"][0]["message"].startswith(
+        "🛡️ [SOMENTE LEITURA]"
+    )
     assert "🧠 Resumo:" in payload["notifications"][0]["message"]
+    assert "🎯 Hipótese principal:" in payload["notifications"][0]["message"]
+    assert "📚 Evidências principais:" in payload["notifications"][0]["message"]
     assert "🪵 Logs da aplicação:" in payload["notifications"][0]["message"]
+    assert "⛔ Ações não executadas:" in payload["notifications"][0]["message"]
     assert "➡️ Próximos passos:" in payload["notifications"][0]["message"]
     assert "📈 Confiança:" in payload["notifications"][0]["message"]
+    assert payload["non_executed_actions"] == [
+        "Nenhuma remediação automatizada foi executada pelo SREAgent; o sistema permanece somente leitura."
+    ]
 
 
 def test_create_alert_detects_recent_deploy_error_and_crashloop() -> None:
@@ -105,6 +121,9 @@ def test_create_alert_detects_recent_deploy_error_and_crashloop() -> None:
         "dominant_error": "timeout",
         "restart_detected": True,
         "crashloop_detected": True,
+        "high_error_rate": True,
+        "latency_elevated": True,
+        "relevant_logs_found": True,
     }
     assert payload["diagnosis"] == {
         "probable_component": "checkout workload",
@@ -115,22 +134,26 @@ def test_create_alert_detects_recent_deploy_error_and_crashloop() -> None:
     }
     assert payload["correlation"]["rule"] == "crashloop-detected"
     assert payload["correlation"]["confidence"] == "high"
-    assert [item["confidence"] for item in payload["hypotheses"]] == [
+    assert payload["correlation"]["primary_hypothesis"].startswith(
+        "O workload de checkout está em crash loop"
+    )
+    assert [item["confidence"] for item in payload["hypotheses"][:3]] == [
         "high",
         "high",
         "high",
     ]
-    assert [item["evidence_ids"] for item in payload["hypotheses"]] == [
-        ["kubernetes-workload-status"],
-        ["loki-error-summary"],
-        ["kubernetes-workload-status"],
+    assert [item["kind"] for item in payload["hypotheses"][:3]] == [
+        "crashloop-detected",
+        "timeout-pattern",
+        "recent-deploy-regression",
     ]
-    assert [
-        item["evidence_ids"] for item in payload["llm_analysis"]["hypotheses_refined"]
-    ] == [
+    assert [item["evidence_ids"] for item in payload["hypotheses"][:3]] == [
         ["kubernetes-workload-status"],
-        ["loki-error-summary"],
-        ["kubernetes-workload-status"],
+        ["loki-error-summary", "prometheus-service-health"],
+        ["kubernetes-workload-status", "prometheus-service-health"],
+    ]
+    assert payload["llm_analysis"]["hypotheses_refined"][0]["evidence_ids"] == [
+        "kubernetes-workload-status"
     ]
     assert any(
         "Recent deploy detected 12 minutes ago" in item["summary"]
@@ -198,11 +221,13 @@ def test_alertmanager_warning_is_normalized_to_medium() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["alert"]["severity"] == "medium"
-    assert payload["alert"]["source"] == "alertmanager"
+    assert payload["status"] == "processed"
+    assert payload["group_count"] == 1
+    assert payload["results"][0]["alert"]["severity"] == "medium"
+    assert payload["results"][0]["alert"]["source"] == "alertmanager"
 
 
-def test_alertmanager_resolved_group_is_acknowledged_without_analysis() -> None:
+def test_alertmanager_resolved_group_is_ignored_by_default() -> None:
     response = client.post(
         "/alerts/alertmanager",
         json={
@@ -227,11 +252,49 @@ def test_alertmanager_resolved_group_is_acknowledged_without_analysis() -> None:
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["status"] == "ignored"
+    assert payload["ignored_groups"] == 1
+    assert payload["results"][0]["status"] == "ignored"
+    assert payload["results"][0]["notifications"] == []
+    assert payload["results"][0]["evidence"] == []
+
+
+def test_alertmanager_resolved_group_can_be_emitted_when_enabled() -> None:
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        alertmanager_emit_resolved=True
+    )
+
+    try:
+        response = client.post(
+            "/alerts/alertmanager",
+            json={
+                "receiver": "sreagent-webhook",
+                "status": "resolved",
+                "alerts": [
+                    {
+                        "status": "resolved",
+                        "labels": {
+                            "alertname": "High5xxRate",
+                            "severity": "critical",
+                            "service": "checkout",
+                            "environment": "prod",
+                        },
+                        "annotations": {
+                            "summary": "Taxa de 5xx normalizada",
+                        },
+                    }
+                ],
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["status"] == "resolved"
-    assert payload["correlation"]["rule"] == "alertmanager-resolved"
-    assert payload["notifications"] == []
-    assert payload["evidence"] == []
-    assert "nenhuma nova analise foi executada" in payload["llm_analysis"]["summary"]
+    assert payload["results"][0]["status"] == "resolved"
+    assert payload["results"][0]["correlation"]["rule"] == "alertmanager-resolved"
+    assert "nenhuma nova análise de incidente foi executada" in payload["results"][0]["llm_analysis"]["summary"]
 
 
 def test_alertmanager_group_uses_common_context_instead_of_first_alert_only() -> None:
@@ -282,20 +345,65 @@ def test_alertmanager_group_uses_common_context_instead_of_first_alert_only() ->
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["alert"]["labels"]["alert_count"] == "2"
-    assert payload["alert"]["message"].endswith("(2 alerts grouped by Alertmanager)")
+    assert payload["group_count"] == 1
+    assert payload["results"][0]["alert"]["labels"]["alert_count"] == "2"
+    assert payload["results"][0]["alert"]["message"].endswith(
+        "(2 alerts grouped by Alertmanager)"
+    )
+
+
+def test_alertmanager_multiple_groups_are_processed() -> None:
+    response = client.post(
+        "/alerts/alertmanager",
+        json={
+            "receiver": "sreagent-webhook",
+            "status": "firing",
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "High5xxRate",
+                        "severity": "critical",
+                        "service": "checkout",
+                        "environment": "prod",
+                    },
+                    "annotations": {
+                        "summary": "Erro alto no checkout",
+                    },
+                },
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "HighLatency",
+                        "severity": "high",
+                        "service": "payments",
+                        "environment": "prod",
+                    },
+                    "annotations": {
+                        "summary": "Latência alta no payments",
+                    },
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["group_count"] == 2
+    assert payload["firing_groups"] == 2
+    assert {result["alert"]["service"] for result in payload["results"]} == {
+        "checkout",
+        "payments",
+    }
 
 
 def test_alertmanager_telegram_failure_does_not_reenter_telegram_channel(monkeypatch) -> None:
-    calls: list[tuple[str, str, str]] = []
+    calls: list[str] = []
 
-    def _fake_send(bot: str, chat: str, text: str, attempts: int = 3, backoff: float = 1.0) -> bool:
-        calls.append((bot, chat, text))
-        return True
+    def _fake_send(self: NotificationService, result: object) -> None:
+        calls.append("sent")
 
-    monkeypatch.setenv("SREAGENT_TELEGRAM_BOT_TOKEN", "bot-token")
-    monkeypatch.setenv("SREAGENT_TELEGRAM_CHAT_ID", "chat-id")
-    monkeypatch.setattr(alerts_api, "_send_telegram_with_retry", _fake_send)
+    monkeypatch.setattr(NotificationService, "_send_telegram_notification", _fake_send)
 
     response = client.post(
         "/alerts/alertmanager",

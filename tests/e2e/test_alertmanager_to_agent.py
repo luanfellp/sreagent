@@ -1,8 +1,6 @@
-import time
 
 import pytest
 import requests
-
 
 pytestmark = pytest.mark.e2e
 
@@ -29,5 +27,11 @@ def test_alertmanager_webhook_to_agent():
     data = r.json()
     # basic schema checks
     assert "status" in data
-    assert "alert" in data
-    assert data["alert"]["severity"] in ("critical", "high", "medium", "low", "info")
+    assert "results" in data
+    assert data["results"][0]["alert"]["severity"] in (
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info",
+    )
