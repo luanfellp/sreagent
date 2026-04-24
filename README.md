@@ -10,6 +10,15 @@ Read-only SRE incident copilot built with Python + FastAPI.
 
 SREAgent receives alerts, collects evidence from Prometheus, Loki and workload metadata, correlates signals, produces a probable diagnosis, and formats an operational PT-BR summary for humans. The LLM is optional and advisory only. It refines wording and hypotheses, but it does not replace observable evidence.
 
+## At a Glance
+
+- API: FastAPI
+- Runtime: Python 3.11+
+- Evidence sources: Prometheus, Loki, workload metadata
+- Delivery: structured API response and optional Telegram notification
+- Guardrail: enforced read-only mode at startup
+- Demo stack: Prometheus, Alertmanager, Loki, Promtail, Grafana, Zabbix, fake service
+
 ## Why This Project Exists
 
 Many incident demos only paraphrase alert text.
@@ -158,6 +167,33 @@ Accepts Alertmanager webhook payloads, groups multiple alerts when needed, and r
 
 Builds a read-only postmortem draft from alert input plus timeline context.
 
+## Example Webhook Response
+
+`POST /alerts/alertmanager` returns a batch-style response because a single webhook can contain multiple grouped alerts.
+
+```json
+{
+  "mode": "read-only",
+  "status": "processed",
+  "group_count": 2,
+  "firing_groups": 2,
+  "resolved_groups": 0,
+  "ignored_groups": 0,
+  "results": [
+    {
+      "status": "analyzed",
+      "title": "🔴 Incidente Crítico em checkout",
+      "correlation": {
+        "rule": "timeout-pattern",
+        "primary_hypothesis": "Os logs indicam timeout como modo de falha dominante em checkout."
+      }
+    }
+  ]
+}
+```
+
+This makes the Alertmanager integration easier to demo because firing and resolved groups can be shown explicitly without pretending that one webhook always maps to one incident.
+
 ## Read-only Output Contract
 
 The output intentionally separates:
@@ -258,6 +294,15 @@ git archive --format=zip --output=sreagent-clean.zip HEAD
 ```
 
 This avoids shipping `.git`, local `.env` files, secrets, caches, and workspace notes.
+
+## Public Demo Checklist
+
+Before showing the project publicly:
+
+1. Keep `deploy/.env` and `deploy/secrets/` local only.
+2. Leave Telegram unconfigured if you do not want outward delivery during the demo.
+3. Rotate any Telegram Bot Token that may have appeared in logs, screenshots, or prior commits.
+4. Generate a clean archive with `git archive` if you need to share the project outside git.
 
 ## Limitations
 
