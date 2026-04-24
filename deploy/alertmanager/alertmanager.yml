@@ -1,0 +1,7 @@
+route:
+  receiver: 'sreagent-webhook'
+receivers:
+  - name: 'sreagent-webhook'
+    webhook_configs:
+      - url: 'http://sreagent:8000/alerts/alertmanager'
+        send_resolved: true

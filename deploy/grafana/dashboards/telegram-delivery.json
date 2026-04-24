@@ -1,0 +1,17 @@
+{
+  "id": null,
+  "title": "Telegram Delivery",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Telegram failures (rate/min)",
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "targets": [
+        {"expr": "increase(sreagent_telegram_send_failure_total[5m])", "refId": "A"}
+      ],
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 0}
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 0
+}

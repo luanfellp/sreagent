@@ -1,3 +1,4 @@
+import os
 from secrets import compare_digest
 from typing import Annotated
 
@@ -19,12 +20,27 @@ from app.integrations.mocks import (
     mock_slack,
 )
 
+# Import real HTTP clients if available
+try:
+    from app.integrations.prometheus_client import PrometheusHTTPClient
+    from app.integrations.loki_client import LokiHTTPClient
+except Exception:
+    PrometheusHTTPClient = None  # type: ignore
+    LokiHTTPClient = None  # type: ignore
+
 
 def get_prometheus_client() -> PrometheusClient:
+    url = os.getenv("SREAGENT_PROMETHEUS_URL")
+    if url and PrometheusHTTPClient is not None:
+        p95_metric = os.getenv("SREAGENT_PROMETHEUS_P95_METRIC")
+        return PrometheusHTTPClient(url, p95_metric)
     return mock_prometheus
 
 
 def get_loki_client() -> LokiClient:
+    url = os.getenv("SREAGENT_LOKI_URL")
+    if url and LokiHTTPClient is not None:
+        return LokiHTTPClient(url)
     return mock_loki
 
 

@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'metrics-generator'
+    static_configs:
+      - targets: ['metrics-generator:8001']
+
+  - job_name: 'sreagent'
+    static_configs:
+      - targets: ['sreagent:8000']
+
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+
+rule_files:
+  - '/etc/prometheus/rules/alerts.yml'
+  - '/etc/prometheus/rules/telegram_alerts.yml'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']

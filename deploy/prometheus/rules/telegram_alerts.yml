@@ -1,0 +1,11 @@
+groups:
+  - name: telegram.rules
+    rules:
+      - alert: TelegramSendFailure
+        expr: increase(sreagent_telegram_send_failure_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Falha na entrega Telegram do SREAgent"
+          description: "O SREAgent registrou falhas de entrega no Telegram nos últimos 5 minutos."

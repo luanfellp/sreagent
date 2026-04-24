@@ -1,0 +1,37 @@
+{
+  "id": null,
+  "title": "Latency & Traffic",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Avg Latency (ms)",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [ {"value": 0, "color": "green"}, {"value": 300, "color": "yellow"}, {"value": 600, "color": "red"} ] }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg_over_time(http_request_duration_ms[1m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate (rps)",
+      "fieldConfig": { "defaults": { "unit": "req/s" } },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m]))",
+          "refId": "B"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 0
+}

@@ -1,0 +1,93 @@
+{
+  "id": null,
+  "title": "Incident Workbench",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Error rate (%)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{service=\"checkout\",environment=\"prod\",code=~\"5..\"}[1m])) / clamp_min(sum(rate(http_requests_total{service=\"checkout\",environment=\"prod\"}[1m])), 0.001)",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Latency p95 (s)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{service=\"checkout\",environment=\"prod\"}[1m])))",
+          "refId": "B"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Restart count",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "max(app_restart_count{service=\"checkout\",environment=\"prod\"})",
+          "refId": "C"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Traffic & errors",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=\"checkout\",environment=\"prod\"}[1m]))",
+          "legendFormat": "req/s",
+          "refId": "D"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{service=\"checkout\",environment=\"prod\",code=~\"5..\"}[1m]))",
+          "legendFormat": "5xx/s",
+          "refId": "E"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Scenario flags",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "app_scenario_active{service=\"checkout\",environment=\"prod\"}",
+          "legendFormat": "{{scenario}}",
+          "refId": "F"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 }
+    },
+    {
+      "type": "logs",
+      "title": "Recent incident logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{service=\"checkout\", environment=\"prod\"}",
+          "refId": "G"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 }
+    }
+  ]
+}

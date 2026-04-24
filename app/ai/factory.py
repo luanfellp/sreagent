@@ -27,7 +27,7 @@ def _build_llm_provider(
             provider="mock",
             enabled=False,
         )
-        return MockLLMProvider(note="LLM disabled by configuration.")
+        return MockLLMProvider(note="⚙️ LLM desabilitada por configuração.")
 
     if provider_name != "openai":
         log_event(
@@ -39,7 +39,7 @@ def _build_llm_provider(
             reason="unsupported_provider",
         )
         return MockLLMProvider(
-            note=f"Unsupported provider '{provider_name}' configured."
+            note=f"⚠️ Provedor não suportado configurado: '{provider_name}'."
         )
 
     if not openai_api_key:
@@ -51,7 +51,7 @@ def _build_llm_provider(
             selected_provider="mock",
             reason="missing_openai_api_key",
         )
-        return MockLLMProvider(note="OpenAI API key missing; mock provider selected.")
+        return MockLLMProvider(note="🔐 OpenAI API key ausente; provedor mock selecionado.")
 
     log_event(
         logger,
@@ -79,7 +79,7 @@ def _build_llm_provider(
             error=str(exc),
         )
         return MockLLMProvider(
-            note="OpenAI provider initialization failed; mock provider selected."
+            note="⚠️ Falha ao inicializar o provedor OpenAI; provedor mock selecionado."
         )
 
 

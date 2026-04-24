@@ -65,7 +65,7 @@ During incident response, engineers often need to answer the same questions very
 
 - Accept incident alerts through an HTTP API
 - Normalize and enrich incoming alert context
-- Collect structured mock evidence from monitoring and platform sources
+- Collect evidence from Prometheus and application logs in Loki
 - Apply deterministic correlation rules
 - Infer probable component, failure type, and scope
 - Return evidence-backed hypotheses with confidence values
@@ -89,6 +89,10 @@ The LLM can improve summarization and refine hypotheses, but it must not invent 
 ### Read-only by default
 
 The project does not mutate external systems. It is designed as an analysis assistant, not an actuator.
+
+### Secrets stay local
+
+Bot tokens, API keys, and demo-specific chat IDs should be injected through environment variables or local secret files under `deploy/secrets/`, never committed to the repository.
 
 ### Safe fallback behavior
 
@@ -119,7 +123,7 @@ Alert Input
    ↓
 Normalization
    ↓
-Enrichment (mock evidence from Prometheus, Loki, Kubernetes)
+Enrichment (Prometheus + logs da aplicação no Loki + contexto de workload)
    ↓
 Deterministic Correlation Rules
    ↓
@@ -133,14 +137,12 @@ Structured Incident Response
 ### Current provider model
 
 The project is structured so integrations can be swapped later for real adapters.  
-At the moment, the following systems are represented by **read-only mock providers**:
+At the moment, the local demo already supports **read-only HTTP integration** with:
 
 - Prometheus
 - Loki
-- Kubernetes
-- Slack
 
-This keeps the application easy to run locally while preserving a clean path to real integrations later.
+Kubernetes and Slack remain lightweight adapters, which keeps the application easy to run locally while preserving a clean path to real integrations later.
 
 ---
 
@@ -371,6 +373,18 @@ python -m venv .venv
 pip install -e .[dev]
 ```
 
+### 4. Demo stack secrets and local env
+
+For the local demo stack, keep secrets out of Git:
+
+```bash
+cp deploy/.env.example deploy/.env
+mkdir -p deploy/secrets
+printf 'your-telegram-bot-token' > deploy/secrets/telegram_bot_token.txt
+```
+
+If you do not want Telegram delivery, leave `SREAGENT_TELEGRAM_CHAT_ID` empty in `deploy/.env` and skip the token file.
+
 ---
 
 ## Running locally
@@ -479,6 +493,7 @@ This project is currently an **MVP / local-first API skeleton** focused on:
 - incident intake
 - deterministic correlation
 - diagnosis shaping
+- análise inicial apoiada por métricas + logs reais da aplicação
 - safe optional LLM refinement
 - draft postmortem generation
 
@@ -490,8 +505,7 @@ The current integrations are mocked, which keeps the system easy to run and test
 
 Possible next steps for the project:
 
-- [ ] Add real Prometheus integration
-- [ ] Add real Loki integration
+- [ ] Add richer multi-service log correlation
 - [ ] Add real Kubernetes integration
 - [ ] Improve correlation coverage and confidence scoring
 - [ ] Store incident history

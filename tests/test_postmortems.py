@@ -35,7 +35,7 @@ def test_create_postmortem_draft_returns_structured_response() -> None:
     assert payload["status"] == "draft"
     assert payload["alert"]["service"] == "checkout"
     assert payload["diagnosis"]["probable_component"] == "checkout"
-    assert payload["incident_summary"].startswith("Deterministic correlation points")
+    assert payload["incident_summary"].startswith("🧠 Análise inicial:")
     assert payload["timeline"][0]["phase"] == "detected"
     assert payload["root_cause_status"] == "hypothesis-only"
     assert "prometheus-service-health" in payload["evidence_references"]

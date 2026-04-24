@@ -99,15 +99,17 @@ def _build_loki_evidence(
     error_summary: LokiErrorSummary, dominant_error: str | None
 ) -> EvidenceItem:
     summary = error_summary.summary
+    if error_summary.examples and "Exemplo recente:" not in summary:
+        summary = f"{summary} Trecho recente: {error_summary.examples[0]}"
     if dominant_error:
-        summary = f"{summary} Dominant error observed: {dominant_error}."
+        summary = f"{summary} Erro dominante observado: {dominant_error}."
 
     attributes = error_summary.model_dump(exclude_none=True)
     attributes["dominant_error"] = dominant_error
     return EvidenceItem(
         id="loki-error-summary",
         source="loki",
-        kind="error-summary",
+        kind="application-log-summary",
         summary=summary,
         attributes=attributes,
         raw=error_summary.model_dump(exclude_none=True),

@@ -17,9 +17,19 @@ class MockLLMProvider(BaseLLMProvider):
         self._note = note
 
     def analyze_incident(self, context: LLMIncidentContext) -> LLMAnalysisResult:
+        log_evidence_present = any(
+            item.source == "loki" and item.kind == "application-log-summary"
+            for item in context.evidence
+        )
+        evidence_basis = (
+            "com apoio de Prometheus e logs reais da aplicação no Loki"
+            if log_evidence_present
+            else "com apoio dos sinais determinísticos disponíveis"
+        )
         summary = (
-            f"Deterministic correlation points to rule {context.correlation.rule} "
-            f"for service {context.alert.service} in {context.alert.environment}."
+            f"🧠 Análise inicial: a correlação determinística aponta para a regra "
+            f"'{context.correlation.rule}' no serviço {context.alert.service} "
+            f"em {context.alert.environment}, {evidence_basis}."
         )
         refined_hypotheses = [
             LLMRefinedHypothesis(
@@ -27,29 +37,29 @@ class MockLLMProvider(BaseLLMProvider):
                 confidence=_string_confidence_to_score(hypothesis.confidence),
                 evidence_ids=hypothesis.evidence_ids,
                 rationale=(
-                    "This refinement mirrors the deterministic correlation and does not add "
-                    "new facts beyond the collected evidence."
+                    "🔎 Esta hipótese apenas refina a correlação determinística e não "
+                    "adiciona fatos além das evidências já coletadas."
                 ),
             )
             for hypothesis in context.deterministic_hypotheses
         ]
 
         next_steps = [
-            "Validate the correlated signals against dashboards and logs.",
-            "Confirm the affected scope before proposing any remediation.",
+            "📊 Validar os sinais correlacionados nos dashboards e logs.",
+            "🧭 Confirmar o escopo afetado antes de propor qualquer remediação.",
         ]
         if context.signals.crashloop_detected:
             next_steps.insert(
-                0, "Inspect restart reasons and pod events for the failing workload."
+                0, "🚨 Inspecionar motivos de restart e eventos dos pods do workload afetado."
             )
         elif context.signals.recent_deploy:
             next_steps.insert(
-                0, "Review the latest deployment timeline and rollout health."
+                0, "🚀 Revisar o último deploy e a saúde do rollout."
             )
 
         confidence_notes = [
-            "Mock LLM provider in use; output is a deterministic refinement layer.",
-            "The LLM layer is advisory only and does not replace collected evidence or deterministic correlation.",
+            "🤖 Provedor LLM mock em uso; a saída é uma camada de refinamento determinística.",
+            "🛡️ A camada de IA é apenas consultiva e não substitui as evidências coletadas nem a correlação determinística.",
         ]
         if self._note:
             confidence_notes.append(self._note)

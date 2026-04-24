@@ -1,0 +1,25 @@
+{
+  "id": null,
+  "title": "Simple Error Rate",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Error rate (%)",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [ {"value": 0, "color": "green"}, {"value": 5, "color": "yellow"}, {"value": 10, "color": "red"} ] }
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{code=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 0
+}

@@ -27,7 +27,7 @@ def build_postmortem_draft(
     incident: IncidentContext, request: PostmortemDraftRequest
 ) -> PostmortemDraft:
     title = request.incident_title or (
-        f"Draft postmortem for {incident.alert.service} {incident.alert.severity} incident"
+        f"📝 Rascunho de postmortem para incidente {incident.alert.severity} em {incident.alert.service}"
     )
     timeline = [
         PostmortemTimelineEvent(
@@ -40,8 +40,8 @@ def build_postmortem_draft(
     ]
     confirmed_facts = _ordered_unique(
         [
-            f"Alert source was {incident.alert.source} with severity {incident.alert.severity}.",
-            f"Primary correlation rule was {incident.correlation.rule}.",
+            f"Fonte do alerta: {incident.alert.source} com severidade {incident.alert.severity}.",
+            f"Regra principal de correlação: {incident.correlation.rule}.",
             *[redact_text(item.summary) for item in incident.evidence],
         ]
     )
@@ -49,27 +49,27 @@ def build_postmortem_draft(
         [item.statement for item in incident.hypotheses]
     )
     unknowns = [
-        "Root cause remains unconfirmed; the current assessment is evidence-based but provisional.",
+        "A causa raiz ainda não está confirmada; a avaliação atual é baseada em evidências, mas ainda provisória.",
     ]
     if not timeline:
         unknowns.append(
-            "A detailed incident timeline was not provided in the postmortem draft request."
+            "Uma linha do tempo detalhada do incidente não foi informada na solicitação do postmortem."
         )
 
     action_items = _ordered_unique(
         [
             *incident.llm_analysis.next_steps,
-            "Document validated root cause evidence before closing the incident review.",
+            "🧾 Documentar a evidência validada da causa raiz antes de encerrar a revisão do incidente.",
         ]
     )
     evidence_references = [item.id for item in incident.evidence]
     impact_summary = (
-        f"The alert indicates a {incident.alert.severity} issue affecting {incident.alert.service} "
-        f"in {incident.alert.environment}. The most likely failure type is "
+        f"O alerta indica um problema de severidade {incident.alert.severity} afetando {incident.alert.service} "
+        f"em {incident.alert.environment}. O tipo de falha mais provável é "
         f"{incident.diagnosis.probable_failure_type}."
     )
     detection_summary = (
-        f"The incident was detected by {incident.alert.source} and correlated as "
+        f"O incidente foi detectado por {incident.alert.source} e correlacionado como "
         f"{incident.correlation.rule}."
     )
 

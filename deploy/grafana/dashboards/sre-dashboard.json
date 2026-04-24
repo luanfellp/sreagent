@@ -1,0 +1,20 @@
+{
+  "id": null,
+  "title": "SRE Dashboard",
+  "panels": [
+    {
+      "type": "text",
+      "title": "Summary",
+      "options": {"content":"**SREAgent demo dashboard**\n\nRealtime overview: error rate, latency and traffic. Use the test script to simulate incidents.","mode":"markdown"},
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0}
+    },
+    {"type":"stat","title":"Error Rate %","fieldConfig":{"defaults":{"unit":"percent","thresholds":{"mode":"absolute","steps":[{"value":0,"color":"green"},{"value":5,"color":"yellow"},{"value":10,"color":"red"}]}}},"targets":[{"expr":"100 * sum(rate(http_requests_total{code=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))","refId":"A"}],"gridPos":{"h":3,"w":8,"x":0,"y":3}},
+    {"type":"stat","title":"Avg Latency (ms)","fieldConfig":{"defaults":{"unit":"ms","thresholds":{"mode":"absolute","steps":[{"value":0,"color":"green"},{"value":300,"color":"yellow"},{"value":600,"color":"red"}]}}},"targets":[{"expr":"avg_over_time(http_request_duration_ms[1m])","refId":"B"}],"gridPos":{"h":3,"w":8,"x":8,"y":3}},
+    {"type":"stat","title":"Req/s","fieldConfig":{"defaults":{"unit":"req/s"}},"targets":[{"expr":"sum(rate(http_requests_total[1m]))","refId":"C"}],"gridPos":{"h":3,"w":8,"x":16,"y":3}},
+    {"type":"timeseries","title":"Error Rate (1m)","targets":[{"expr":"100 * sum(rate(http_requests_total{code=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))","refId":"D"}],"gridPos":{"h":8,"w":12,"x":0,"y":6}},
+    {"type":"timeseries","title":"Latency (ms)","targets":[{"expr":"avg_over_time(http_request_duration_ms[1m])","refId":"E"}],"gridPos":{"h":8,"w":12,"x":12,"y":6}},
+    {"type":"timeseries","title":"Request Rate (rps)","targets":[{"expr":"sum(rate(http_requests_total[1m]))","refId":"F"}],"gridPos":{"h":6,"w":24,"x":0,"y":14}}
+  ],
+  "schemaVersion": 16,
+  "version": 0
+}

@@ -1,0 +1,49 @@
+groups:
+  - name: sreagent.rules
+    rules:
+      - alert: High5xxRate
+        expr: |
+          100 * sum by(service, environment) (rate(http_requests_total{code=~"5.."}[1m]))
+          /
+          clamp_min(sum by(service, environment) (rate(http_requests_total[1m])), 0.001)
+          > 8
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Taxa de 5xx acima de 8% em {{ $labels.service }}"
+          description: "O serviço {{ $labels.service }} em {{ $labels.environment }} está com taxa elevada de erros 5xx."
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum by(service, environment, le) (rate(http_request_duration_seconds_bucket[1m]))) > 0.7
+        for: 0m
+        labels:
+          severity: high
+        annotations:
+          summary: "Latência p95 elevada em {{ $labels.service }}"
+          description: "O serviço {{ $labels.service }} em {{ $labels.environment }} está com latência p95 acima de 700ms."
+
+      - alert: CrashLoopDetected
+        expr: max by(service, environment) (app_crashloop_detected) > 0
+        for: 0m
+        labels:
+          severity: critical
+          crashloop: "true"
+          pod_status: CrashLoopBackOff
+        annotations:
+          summary: "CrashLoopBackOff detectado em {{ $labels.service }}"
+          description: "O serviço {{ $labels.service }} em {{ $labels.environment }} está simulando CrashLoopBackOff."
+
+      - alert: RecentDeployRegression
+        expr: |
+          max by(service, environment) (app_recent_deploy) > 0
+          and
+          histogram_quantile(0.95, sum by(service, environment, le) (rate(http_request_duration_seconds_bucket[1m]))) > 0.4
+        for: 0m
+        labels:
+          severity: high
+          recent_deploy: "true"
+        annotations:
+          summary: "Possível regressão após deploy em {{ $labels.service }}"
+          description: "O serviço {{ $labels.service }} em {{ $labels.environment }} sofreu regressão logo após deploy recente."

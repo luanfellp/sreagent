@@ -1,0 +1,28 @@
+{
+  "id": null,
+  "title": "SREAgent Overview",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Current Error Rate",
+      "fieldConfig": {"defaults": {"unit": "percent"}},
+      "targets": [{"expr": "100 * sum(rate(http_requests_total{code=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Avg Latency (ms)",
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "targets": [{"expr": "avg_over_time(http_request_duration_ms[1m])", "refId": "B"}],
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Error rate (1m)",
+      "targets": [{"expr": "100 * sum(rate(http_requests_total{code=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))","refId":"C"}],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 4}
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 0
+}

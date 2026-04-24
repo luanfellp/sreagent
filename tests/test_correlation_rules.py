@@ -56,7 +56,7 @@ def test_dominant_error_generates_loki_backed_hypothesis() -> None:
     loki_evidence = next(
         item for item in enriched.evidence if item.id == "loki-error-summary"
     )
-    assert "Dominant error observed: timeout" in loki_evidence.summary
+    assert "Erro dominante observado: timeout" in loki_evidence.summary
 
 
 def test_crashloop_generates_high_confidence_hypothesis() -> None:

@@ -1,0 +1,46 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: application-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: application-logs
+          log_source: application
+          __path__: /var/log/demo/*-app.log
+    pipeline_stages:
+      - json:
+          expressions:
+            ts: ts
+            level: level
+            service: service
+            environment: environment
+            component: component
+            logger: logger
+            log_source: log_source
+            scenario: scenario
+            message: message
+            dominant_error: dominant_error
+            http_status: http_status
+            latency_ms: latency_ms
+      - labels:
+          level:
+          service:
+          environment:
+          component:
+          logger:
+          log_source:
+          scenario:
+          dominant_error:
+          http_status:
+      - timestamp:
+          source: ts
+          format: RFC3339

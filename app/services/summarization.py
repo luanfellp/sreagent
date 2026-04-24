@@ -4,6 +4,41 @@ from app.integrations.interfaces import SlackClient
 from app.integrations.mocks import mock_slack
 
 
+SEVERITY_EMOJI = {
+    "critical": "🔴",
+    "high": "🟠",
+    "medium": "🟡",
+    "low": "🔵",
+    "info": "⚪",
+}
+
+STATUS_LABEL = {
+    "critical": "Crítico",
+    "high": "Alto",
+    "medium": "Médio",
+    "low": "Baixo",
+    "info": "Informativo",
+}
+
+CONFIDENCE_LABEL = {
+    "high": "Alta",
+    "medium": "Média",
+    "low": "Baixa",
+}
+
+FAILURE_TYPE_LABEL = {
+    "service-degradation": "degradação de serviço",
+    "crashloop": "crashloop",
+    "unknown": "indefinida",
+}
+
+SCOPE_LABEL = {
+    "single-service": "serviço único",
+    "single-workload": "workload específico",
+    "unknown": "escopo indefinido",
+}
+
+
 def _ordered_unique(items: list[str]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -18,27 +53,60 @@ def summarize_alert(
     incident: IncidentContext,
     slack_client: SlackClient = mock_slack,
 ) -> AlertResponse:
-    title = (
-        f"{incident.alert.severity.upper()} incident alert for {incident.alert.service}"
+    severity = incident.alert.severity.lower()
+    emoji = SEVERITY_EMOJI.get(severity, "⚠️")
+    severity_label = STATUS_LABEL.get(severity, severity.title())
+    confidence_label = CONFIDENCE_LABEL.get(
+        incident.diagnosis.confidence.lower(), incident.diagnosis.confidence
     )
-    status = "analyzed" if incident.alert.severity.lower() != "info" else "observed"
-    summary = (
-        f"{incident.llm_analysis.summary} | service={incident.alert.service} "
-        f"| environment={incident.alert.environment} "
-        f"| dedup_key={incident.correlation.dedup_key}"
+    failure_label = FAILURE_TYPE_LABEL.get(
+        incident.diagnosis.probable_failure_type,
+        incident.diagnosis.probable_failure_type,
     )
+    scope_label = SCOPE_LABEL.get(
+        incident.diagnosis.probable_scope,
+        incident.diagnosis.probable_scope,
+    )
+
+    title = f"{emoji} Incidente {severity_label} em {incident.alert.service}"
+    status = "analyzed" if severity != "info" else "observed"
+
     actions = [
-        "Validate the alert against dashboards and logs before any remediation.",
-        "Review the affected workload state and recent deploy history.",
+        "✅ Validar o alerta em dashboards e logs antes de qualquer ação.",
+        "🛠️ Revisar o estado do workload afetado e o histórico recente de deploys.",
     ]
     if incident.signals.crashloop_detected:
         actions.insert(
-            0, "Inspect pod events and restart reasons for the affected workload."
+            0, "🚨 Inspecionar eventos do pod e motivos de restart do workload afetado."
         )
     elif incident.signals.recent_deploy:
-        actions.insert(0, "Review the most recent deployment and its rollout timeline.")
+        actions.insert(0, "🚀 Revisar o deploy mais recente e a linha do tempo do rollout.")
 
     actions = _ordered_unique(actions + incident.llm_analysis.next_steps)
+
+    loki_evidence = next(
+        (item for item in incident.evidence if item.source == "loki"), None
+    )
+    logs_line = (
+        loki_evidence.summary if loki_evidence else "Sem evidência recente de logs da aplicação."
+    )
+
+    executive_lines = [
+        title,
+        "",
+        f"🧠 Resumo: {incident.llm_analysis.summary}",
+        f"🪵 Logs da aplicação: {logs_line}",
+        f"🎯 Diagnóstico: {failure_label} em {incident.diagnosis.probable_component}",
+        f"📈 Confiança: {confidence_label}",
+        f"🌍 Ambiente: {incident.alert.environment}",
+        f"🧭 Escopo: {scope_label}",
+        f"🧩 Regra: {incident.correlation.rule}",
+        f"🆔 Dedup: {incident.correlation.dedup_key}",
+        "",
+        "➡️ Próximos passos:",
+        *[f"• {item}" for item in actions[:3]],
+    ]
+    summary = "\n".join(executive_lines)
 
     notification = slack_client.build_notification_preview(title, summary)
     return AlertResponse(

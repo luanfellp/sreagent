@@ -33,7 +33,14 @@ def _incident_context() -> LLMIncidentContext:
                 kind="service-health",
                 summary="Latency is elevated compared to baseline.",
                 attributes={"latency_p95_ms": 850},
-            )
+            ),
+            LLMContextEvidence(
+                id="loki-error-summary",
+                source="loki",
+                kind="application-log-summary",
+                summary="Logs da aplicação mostram timeouts próximos ao alerta.",
+                attributes={"error_count": 12},
+            ),
         ],
         deterministic_hypotheses=[
             LLMContextHypothesis(
@@ -51,6 +58,8 @@ def test_mock_provider_returns_valid_analysis_structure() -> None:
     result = provider.analyze_incident(_incident_context())
 
     assert result.summary
+    assert result.summary.startswith("🧠 Análise inicial:")
+    assert "logs reais da aplicação no Loki" in result.summary
     assert result.hypotheses_refined
     assert 0.0 <= result.hypotheses_refined[0].confidence <= 1.0
     assert result.hypotheses_refined[0].evidence_ids == ["prometheus-service-health"]

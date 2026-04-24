@@ -1,0 +1,110 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - ./prometheus/rules/alerts.yml:/etc/prometheus/rules/alerts.yml:ro,z
+      - ./prometheus/rules/telegram_alerts.yml:/etc/prometheus/rules/telegram_alerts.yml:ro,z
+    ports:
+      - "9091:9090"
+    networks:
+      - sre-net
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro,z
+    ports:
+      - "3100:3100"
+    networks:
+      - sre-net
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail/config.yml:/etc/promtail/config.yml:ro,z
+      - demo_logs:/var/log/demo:ro
+    depends_on:
+      - loki
+      - metrics-generator
+    networks:
+      - sre-net
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - sre-net
+
+  metrics-generator:
+    build: ./metrics_generator
+    volumes:
+      - demo_logs:/var/log/demo
+    ports:
+      - "8001:8001"
+    networks:
+      - sre-net
+
+  zabbix:
+    image: zabbix/zabbix-appliance:latest
+    ports:
+      - "8080:80"
+    networks:
+      - sre-net
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+    ports:
+      - "9093:9093"
+    networks:
+      - sre-net
+
+  sreagent:
+    image: python:3.11-slim
+    volumes:
+      - ${SREAGENT_APP_PATH:-..}:/app:rw,z
+    working_dir: /app
+    command: /bin/sh -c "pip install -e . && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      - SREAGENT_ENABLE_LLM=false
+      - SREAGENT_PROMETHEUS_URL=http://prometheus:9090
+      - SREAGENT_PROMETHEUS_P95_METRIC=http_request_duration_seconds
+      - SREAGENT_LOKI_URL=http://loki:3100
+      - SREAGENT_READ_ONLY_MODE=true
+      - SREAGENT_TELEGRAM_CHAT_ID=${SREAGENT_TELEGRAM_CHAT_ID:-}
+      - SREAGENT_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
+    secrets:
+      - telegram_bot_token
+    ports:
+      - "8002:8000"
+    networks:
+      - sre-net
+    depends_on:
+      - prometheus
+      - loki
+      - alertmanager
+
+networks:
+  sre-net:
+    driver: bridge
+
+volumes:
+  demo_logs:
+
+secrets:
+  telegram_bot_token:
+    file: ${SREAGENT_TELEGRAM_BOT_TOKEN_FILE:-./secrets/telegram_bot_token.txt}

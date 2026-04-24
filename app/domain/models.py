@@ -24,7 +24,13 @@ class AlertInput(BaseModel):
     @field_validator("severity", mode="before")
     @classmethod
     def normalize_severity(cls, value: str) -> str:
-        return value.strip().lower()
+        normalized = value.strip().lower()
+        aliases = {
+            "warning": "medium",
+            "warn": "medium",
+            "error": "high",
+        }
+        return aliases.get(normalized, normalized)
 
 
 class NormalizedAlert(BaseModel):

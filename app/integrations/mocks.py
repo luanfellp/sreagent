@@ -31,10 +31,12 @@ class MockLokiClient:
             environment=environment,
             summary=(
                 f"Mock Loki evidence for {service} in {environment}: "
-                "recent logs contain repeated error entries around the alert window."
+                "logs da aplicação contêm erros repetidos e úteis para a análise inicial."
             ),
             error_count=37,
-            examples=["timeout while calling downstream dependency"],
+            examples=[
+                "error 504 1342ms - timeout while calling downstream dependency"
+            ],
         )
 
 
@@ -46,8 +48,8 @@ class MockKubernetesClient:
             service=service,
             environment=environment,
             summary=(
-                f"Mock Kubernetes evidence for {service} in {environment}: "
-                "deployment is running and no rollout is currently in progress."
+                f"Nenhum provider de Kubernetes configurado para {service} em {environment}; "
+                "apenas metadados do alerta estão disponíveis para estado do workload."
             ),
             rollout_in_progress=False,
             restart_count=0,
@@ -60,7 +62,7 @@ class MockSlackClient:
         self, title: str, summary: str
     ) -> SlackMessagePreview:
         return SlackMessagePreview(
-            channel="slack", message=f"[READ-ONLY] {title} | {summary}"
+            channel="slack", message=f"🛡️ [SOMENTE LEITURA] {title}\n\n{summary}"
         )
 
 
