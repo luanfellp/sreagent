@@ -1,240 +1,217 @@
-# sreagent
+# SREAgent
 
-SRE incident copilot built with Python and FastAPI.
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/fastapi-api-009688)](https://fastapi.tiangolo.com/)
+[![Read-only](https://img.shields.io/badge/mode-read--only-critical)](#security-and-operational-notes)
+[![Observability Demo](https://img.shields.io/badge/demo-prometheus%20%2B%20loki%20%2B%20grafana-orange)](#run-the-full-local-demo-stack)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-`sreagent` is a read-only incident analysis API designed to help SRE, platform, and on-call teams turn alerts into structured, evidence-backed incident assessments. It enriches incoming alerts, correlates operational signals, derives a probable diagnosis, and can optionally use an LLM to refine the final response without replacing deterministic reasoning.
+Read-only SRE incident copilot built with Python + FastAPI.
 
----
-
-## Table of contents
-
-- [Overview](#overview)
-- [Why this project exists](#why-this-project-exists)
-- [Current capabilities](#current-capabilities)
-- [Design principles](#design-principles)
-- [Architecture overview](#architecture-overview)
-- [Tech stack](#tech-stack)
-- [Project structure](#project-structure)
-- [API endpoints](#api-endpoints)
-  - [`GET /health`](#get-health)
-  - [`POST /alerts`](#post-alerts)
-  - [`POST /postmortems/draft`](#post-postmortemsdraft)
-- [Request examples](#request-examples)
-- [Response highlights](#response-highlights)
-- [Local setup](#local-setup)
-- [Configuration](#configuration)
-- [LLM behavior](#llm-behavior)
-- [Testing](#testing)
-- [Current status](#current-status)
-- [Roadmap](#roadmap)
-- [License](#license)
+SREAgent receives alerts, correlates evidence from observability sources, produces an initial diagnosis, and formats a clear incident summary for chat surfaces like Telegram. The current local demo uses **Prometheus + Alertmanager + Loki + Grafana** with a fake service that emits both metrics and structured application logs.
 
 ---
 
-## Overview
+## Demo in 2 minutes
 
-`sreagent` is an API-first incident analysis service that receives alerts, gathers structured context, applies deterministic correlation rules, infers a probable diagnosis, and produces outputs that can support triage, escalation, and postmortem drafting.
+```bash
+git clone https://github.com/luanfellp/sreagent.git
+cd sreagent
+cp deploy/.env.example deploy/.env
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+docker compose -f deploy/docker-compose.local.yml up -d --build
+bash deploy/test_incident.sh timeout
+```
 
-The project is intentionally designed with a **deterministic-first** architecture. An LLM can be enabled as an **optional refinement layer**, but it does not replace evidence collection or the base reasoning workflow.
-
-This makes the system easier to trust, test, and evolve.
-
----
-
-## Why this project exists
-
-During incident response, engineers often need to answer the same questions very quickly:
-
-- What is failing?
-- Which service or component is most likely affected?
-- What evidence supports that conclusion?
-- What should the on-call engineer inspect next?
-- Can we start a postmortem draft from the alert itself?
-
-`sreagent` aims to standardize that first-response layer with a pipeline that is:
-
-- safe
-- structured
-- explainable
-- easy to extend
-- usable locally without external dependencies
+What you get:
+- fake service emits **metrics + application logs**
+- Prometheus evaluates alert rules
+- Alertmanager sends webhook to SREAgent
+- SREAgent queries **Prometheus + Loki**
+- result is formatted as a **PT-BR executive incident summary**
 
 ---
 
-## Current capabilities
+## Why this project is different
 
-- Accept incident alerts through an HTTP API
+A lot of “AI for incidents” demos only summarize the alert text.
+
+This one tries to be more honest:
+- it is **read-only**
+- it uses **deterministic correlation first**
+- it queries **real Prometheus signals** in the demo
+- it queries **real application logs in Loki** in the demo
+- it keeps the LLM as an **advisory layer**, not the source of truth
+- it is designed to produce something a human on-call can actually use in the first minutes of an incident
+
+---
+
+## What the project does today
+
+### API capabilities
+- Accept alerts through HTTP
 - Normalize and enrich incoming alert context
-- Collect evidence from Prometheus and application logs in Loki
+- Query **Prometheus** for service health signals
+- Query **Loki** for recent **application logs**
 - Apply deterministic correlation rules
 - Infer probable component, failure type, and scope
-- Return evidence-backed hypotheses with confidence values
-- Generate a draft postmortem using the same incident analysis pipeline
-- Optionally refine the final response with an LLM
-- Run in read-only mode with safe local defaults
-- Fall back to a mock LLM provider when the real provider is disabled or unavailable
+- Produce PT-BR executive summaries suitable for Telegram/WhatsApp
+- Draft postmortems from the same evidence pipeline
+- Optionally add an LLM refinement layer without replacing deterministic reasoning
+
+### Demo stack capabilities
+- Prometheus scraping a fake service and SREAgent metrics
+- Alertmanager forwarding alerts to SREAgent
+- Loki + Promtail ingesting structured application logs
+- Grafana dashboards for incidents, traffic, latency, and Telegram delivery
+- Fake incident scenarios:
+  - `high5xx`
+  - `timeout`
+  - `crashloop`
+  - `deploy_regression`
+  - `normal`
 
 ---
 
-## Design principles
+## Screenshots / media to add
 
-### Deterministic first
+Recommended assets for a stronger public repo page:
+- Grafana **Incident Workbench** screenshot
+- terminal run of `deploy/test_incident.sh timeout`
+- Telegram message screenshot with the final incident summary
+- short GIF showing: scenario trigger → alert → analysis → Telegram delivery
 
-Correlation rules are the primary reasoning layer. The system should produce useful output even when no LLM is enabled.
+Suggested filenames if you want to add them later:
+- `docs/media/grafana-incident-workbench.png`
+- `docs/media/telegram-incident-summary.png`
+- `docs/media/demo-flow.gif`
 
-### LLM as advisory only
+Example markdown block for later:
 
-The LLM can improve summarization and refine hypotheses, but it must not invent evidence or replace deterministic signals.
-
-### Read-only by default
-
-The project does not mutate external systems. It is designed as an analysis assistant, not an actuator.
-
-### Secrets stay local
-
-Bot tokens, API keys, and demo-specific chat IDs should be injected through environment variables or local secret files under `deploy/secrets/`, never committed to the repository.
-
-### Safe fallback behavior
-
-The application still runs locally without real external credentials. When the LLM is misconfigured or unavailable, the system falls back safely to a mock provider.
-
-### Evidence-backed output
-
-Conclusions are tied to structured evidence and `evidence_ids`, making the response easier to inspect and validate.
+```md
+![Incident Workbench](docs/media/grafana-incident-workbench.png)
+![Telegram Incident Summary](docs/media/telegram-incident-summary.png)
+```
 
 ---
 
-## Architecture overview
-
-The analysis pipeline follows this flow:
-
-1. **Alert intake**
-2. **Normalization**
-3. **Enrichment**
-4. **Deterministic correlation**
-5. **Diagnosis inference**
-6. **Optional LLM refinement**
-7. **Final summarization**
-
-### High-level flow
+## Architecture
 
 ```text
 Alert Input
    ↓
 Normalization
    ↓
-Enrichment (Prometheus + logs da aplicação no Loki + contexto de workload)
+Enrichment
+   ├─ Prometheus service-health query
+   ├─ Loki application-log query
+   └─ Workload/demo context
    ↓
-Deterministic Correlation Rules
+Deterministic correlation
    ↓
-Probable Diagnosis
+Diagnosis
    ↓
-Optional LLM Refinement
+Optional LLM refinement
    ↓
-Structured Incident Response
+PT-BR executive summary + notification preview
 ```
 
-### Current provider model
+## Local demo flow
 
-The project is structured so integrations can be swapped later for real adapters.  
-At the moment, the local demo already supports **read-only HTTP integration** with:
+```text
+Fake service
+  ├─ emits Prometheus metrics
+  └─ writes structured application logs
+        ↓
+Prometheus evaluates alert rules
+Promtail ships logs to Loki
+        ↓
+Alertmanager sends webhook to SREAgent
+        ↓
+SREAgent queries Prometheus + Loki
+        ↓
+SREAgent returns read-only incident analysis
+        ↓
+Optional Telegram delivery
+```
 
+---
+
+## Stack
+
+### Application
+- Python 3.11+
+- FastAPI
+- Pydantic
+- Uvicorn
+- httpx
+- OpenAI Python SDK (optional)
+
+### Demo / observability
 - Prometheus
+- Alertmanager
 - Loki
-
-Kubernetes and Slack remain lightweight adapters, which keeps the application easy to run locally while preserving a clean path to real integrations later.
-
----
-
-## Tech stack
-
-- **Python 3.11+**
-- **FastAPI**
-- **Pydantic**
-- **Uvicorn**
-- **Pytest**
-- **OpenAI Python client** (optional LLM provider)
+- Promtail
+- Grafana
+- Zabbix
+- Docker Compose
 
 ---
 
-## Project structure
+## Repository structure
 
 ```text
 sreagent/
 ├── app/
-│   ├── api/
 │   ├── ai/
+│   ├── api/
 │   ├── core/
-│   ├── models/
-│   ├── providers/
+│   ├── domain/
+│   ├── integrations/
 │   ├── services/
 │   ├── dependencies.py
 │   └── main.py
+├── deploy/
+│   ├── alertmanager/
+│   ├── grafana/
+│   ├── metrics_generator/
+│   ├── prometheus/
+│   ├── promtail/
+│   └── docker-compose.local.yml
+├── docs/
+├── scripts/
 ├── tests/
-├── pyproject.toml
 └── README.md
 ```
 
-### Structure summary
-
-- `app/api/` → FastAPI route handlers
-- `app/ai/` → LLM abstractions, providers, and related logic
-- `app/core/` → config and shared core definitions
-- `app/models/` → request and response schemas
-- `app/providers/` → mock external system adapters
-- `app/services/` → enrichment, correlation, diagnosis, and orchestration logic
-- `tests/` → automated test coverage
-
 ---
 
-## API endpoints
+## Endpoints
 
 ### `GET /health`
+Basic health check.
 
-Basic healthcheck endpoint.
-
-#### Example response
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
+### `GET /metrics`
+Prometheus metrics for the SREAgent service itself.
 
 ### `POST /alerts`
+Accepts a normalized alert payload and returns a structured incident assessment.
 
-Receives an alert payload, runs the incident analysis pipeline, and returns a structured incident assessment.
-
-The response can include:
-
-- normalized alert data
-- collected evidence
-- correlation result
-- probable diagnosis
-- hypotheses
-- optional LLM refinement
-- notification preview
-
----
+### `POST /alerts/alertmanager`
+Accepts Alertmanager webhook payloads and converts them into SREAgent internal alert input.
 
 ### `POST /postmortems/draft`
-
-Generates a draft postmortem using the same incident analysis pipeline used by `/alerts`.
-
-This endpoint is intended to turn the original alert and a basic timeline into a structured draft that can later be improved by humans.
+Builds a draft postmortem from alert input plus timeline context.
 
 ---
 
-## Request examples
-
-### Example alert request
+## Example alert request
 
 ```bash
 curl -X POST http://127.0.0.1:8000/alerts \
   -H "Content-Type: application/json" \
-  -H "X-API-Token: change-me" \
   -d '{
     "source": "grafana",
     "severity": "critical",
@@ -246,136 +223,76 @@ curl -X POST http://127.0.0.1:8000/alerts \
   }'
 ```
 
-If you do not configure `SREAGENT_API_TOKEN`, remove the `X-API-Token` header.
-
----
-
-### Example postmortem draft request
+If `SREAGENT_API_TOKEN` is configured, add:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/postmortems/draft \
-  -H "Content-Type: application/json" \
-  -H "X-API-Token: change-me" \
-  -d '{
-    "alert": {
-      "source": "grafana",
-      "severity": "critical",
-      "message": "Checkout latency is above threshold.",
-      "labels": {
-        "service": "checkout",
-        "environment": "prod"
-      }
-    },
-    "timeline": [
-      {
-        "timestamp": "2026-04-22T10:15:00Z",
-        "phase": "detected",
-        "summary": "Pager notified the on-call engineer.",
-        "source": "pagerduty"
-      }
-    ]
-  }'
+-H "X-API-Token: your-token"
 ```
 
----
-
-## Response highlights
-
-A typical `/alerts` response can include the following logical sections:
-
-- **Normalized alert**
-- **Structured evidence**
-- **Detected signals**
-- **Correlation rule**
-- **Confidence**
-- **Diagnosis**
-- **Hypotheses**
-- **Optional `llm_analysis`**
-- **Notification preview**
-
-### Example conceptual shape
+## Example response shape
 
 ```json
 {
-  "alert": {
-    "source": "grafana",
-    "severity": "critical",
-    "message": "Checkout latency is above threshold.",
-    "labels": {
-      "service": "checkout",
-      "environment": "prod"
+  "mode": "read-only",
+  "status": "analyzed",
+  "title": "🟠 Incidente Alto em checkout",
+  "signals": {
+    "recent_deploy": false,
+    "dominant_error": "timeout",
+    "restart_detected": true,
+    "crashloop_detected": false
+  },
+  "evidence": [
+    {
+      "source": "prometheus",
+      "kind": "service-health"
+    },
+    {
+      "source": "loki",
+      "kind": "application-log-summary"
     }
-  },
-  "signals": [
-    "recent deploy detected",
-    "dominant error detected",
-    "restart detected"
   ],
-  "correlation": {
-    "rule": "restart-detected",
-    "confidence": 0.82
-  },
   "diagnosis": {
     "probable_component": "checkout",
-    "probable_failure_type": "runtime instability",
-    "probable_scope": "service-level",
-    "confidence": 0.82,
-    "supporting_evidence_ids": [
-      "kubernetes-workload-status"
-    ]
+    "probable_failure_type": "service-degradation",
+    "probable_scope": "single-service",
+    "confidence": "high"
   },
-  "hypotheses": [
-    {
-      "title": "The checkout workload is unstable after a recent change.",
-      "confidence": 0.82,
-      "evidence_ids": [
-        "kubernetes-workload-status",
-        "deployment-history"
-      ]
-    }
-  ],
   "llm_analysis": {
-    "summary": "Optional refinement based on deterministic findings."
+    "summary": "🧠 Análise inicial..."
   }
 }
 ```
 
 ---
 
-## Local setup
+## Quick start
 
-### 1. Clone the repository
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/luanfellp/sreagent.git
 cd sreagent
-```
-
-### 2. Create and activate a virtual environment
-
-#### Linux / macOS
-
-```bash
 python -m venv .venv
 source .venv/bin/activate
-```
-
-#### Windows PowerShell
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-### 3. Install dependencies
-
-```bash
 pip install -e .[dev]
 ```
 
-### 4. Demo stack secrets and local env
+### 2. Run the API only
 
-For the local demo stack, keep secrets out of Git:
+```bash
+uvicorn app.main:app --reload
+```
+
+Available at:
+- `http://127.0.0.1:8000`
+- `http://127.0.0.1:8000/docs`
+
+---
+
+## Run the full local demo stack
+
+### 1. Prepare local env/secrets
 
 ```bash
 cp deploy/.env.example deploy/.env
@@ -385,137 +302,121 @@ printf 'your-telegram-bot-token' > deploy/secrets/telegram_bot_token.txt
 
 If you do not want Telegram delivery, leave `SREAGENT_TELEGRAM_CHAT_ID` empty in `deploy/.env` and skip the token file.
 
----
-
-## Running locally
-
-Start the API with:
+### 2. Start the stack
 
 ```bash
-uvicorn app.main:app --reload
+docker compose -f deploy/docker-compose.local.yml up -d --build
 ```
 
-The application should be available at:
+### 3. Trigger a scenario
 
-```text
-http://127.0.0.1:8000
+```bash
+curl -X POST 'http://localhost:8001/scenario?name=timeout'
 ```
 
-FastAPI interactive docs should be available at:
+### 4. Run the demo script
 
-```text
-http://127.0.0.1:8000/docs
+```bash
+bash deploy/test_incident.sh timeout
 ```
+
+### 5. Run all scenarios
+
+```bash
+bash deploy/run_demo_scenarios.sh
+```
+
+---
+
+## Grafana and demo services
+
+- Grafana: `http://localhost:3000`
+- Prometheus: `http://localhost:9091`
+- Alertmanager: `http://localhost:9093`
+- Loki: `http://localhost:3100`
+- Fake service: `http://localhost:8001`
+- SREAgent: `http://localhost:8002`
+- Zabbix: `http://localhost:8080`
+
+Recommended dashboard:
+- **Incident Workbench**
 
 ---
 
 ## Configuration
 
-All environment variables are optional unless you want to:
-
-- protect the alert endpoint with a token
-- enable the OpenAI-backed LLM provider
-
-### Example configuration
-
-```bash
-export SREAGENT_API_TOKEN="change-me"
-export SREAGENT_READ_ONLY_MODE=true
-export SREAGENT_ENABLE_LLM=false
-export SREAGENT_LLM_PROVIDER=openai
-export SREAGENT_OPENAI_API_KEY=""
-export SREAGENT_OPENAI_MODEL=gpt-5
-export SREAGENT_LLM_TIMEOUT_SECONDS=15
-```
-
-### Environment variables
+### Core env vars
 
 | Variable | Description | Default |
 |---|---|---|
-| `SREAGENT_API_TOKEN` | Optional API token required by `POST /alerts` when set | unset |
-| `SREAGENT_READ_ONLY_MODE` | Keeps the application in read-only posture | `true` |
-| `SREAGENT_ENABLE_LLM` | Enables the LLM refinement layer | `false` |
+| `SREAGENT_API_TOKEN` | Optional auth token for API endpoints | unset |
+| `SREAGENT_READ_ONLY_MODE` | Keeps the service in read-only posture | `true` |
+| `SREAGENT_ENABLE_LLM` | Enables optional LLM refinement | `false` |
 | `SREAGENT_LLM_PROVIDER` | LLM provider identifier | `openai` |
 | `SREAGENT_OPENAI_API_KEY` | OpenAI API key | unset |
 | `SREAGENT_OPENAI_MODEL` | OpenAI model name | `gpt-5` |
 | `SREAGENT_LLM_TIMEOUT_SECONDS` | Timeout for LLM requests | `15` |
-
----
-
-## LLM behavior
-
-The project supports an optional LLM analysis layer after deterministic correlation.
-
-### Pipeline behavior
-
-- alert input
-- enrichment
-- correlation
-- optional LLM analysis
-- final summarization
-
-### Important constraints
-
-- the system remains read-only
-- deterministic correlation remains the base layer
-- the LLM is advisory and should not replace collected evidence
-- if the LLM is disabled or unavailable, the system falls back safely
-- common sensitive values are redacted before sending context to the LLM
-
-### Provider behavior
-
-- `SREAGENT_ENABLE_LLM=false` → use mock provider
-- `SREAGENT_ENABLE_LLM=true` and missing API key → use mock provider with safe fallback
-- `SREAGENT_ENABLE_LLM=true` and valid configuration → use the OpenAI provider
+| `SREAGENT_PROMETHEUS_URL` | Prometheus base URL | unset |
+| `SREAGENT_PROMETHEUS_P95_METRIC` | Histogram metric base name used for p95 | `http_request_duration_seconds` |
+| `SREAGENT_LOKI_URL` | Loki base URL | unset |
+| `SREAGENT_TELEGRAM_CHAT_ID` | Optional Telegram target chat | unset |
+| `SREAGENT_TELEGRAM_BOT_TOKEN_FILE` | Path to local Telegram bot token file | unset |
 
 ---
 
 ## Testing
 
-Run the test suite with:
+### Unit/integration tests
 
 ```bash
-pytest
+pytest -q tests
 ```
 
-You can also run in verbose mode:
+### E2E Alertmanager webhook smoke test
 
 ```bash
-pytest -v
+pytest -q tests/e2e/test_alertmanager_to_agent.py
 ```
+
+---
+
+## Security and operational notes
+
+- **Read-only by design**: no remediation or infra mutation
+- **Secrets must stay local**: use `deploy/.env` and `deploy/secrets/`
+- **LLM is advisory only**: deterministic evidence remains the source of truth
+- **Kubernetes evidence is still demo-level**: no real cluster provider is wired yet
+- **Telegram delivery is optional** and should never require secrets committed to Git
 
 ---
 
 ## Current status
 
-This project is currently an **MVP / local-first API skeleton** focused on:
-
-- incident intake
-- deterministic correlation
-- diagnosis shaping
-- análise inicial apoiada por métricas + logs reais da aplicação
-- safe optional LLM refinement
-- draft postmortem generation
-
-The current integrations are mocked, which keeps the system easy to run and test locally.
+This project is no longer just a bare API skeleton. It now has a usable local observability demo with:
+- real Prometheus queries
+- real Loki log lookups
+- structured PT-BR incident summaries
+- Telegram-ready output
+- end-to-end incident scenarios for demos and portfolio usage
 
 ---
 
 ## Roadmap
 
-Possible next steps for the project:
-
-- [ ] Add richer multi-service log correlation
+- [ ] Add richer multi-service correlation
 - [ ] Add real Kubernetes integration
-- [ ] Improve correlation coverage and confidence scoring
+- [ ] Improve diagnosis confidence scoring
 - [ ] Store incident history
-- [ ] Add Slack or PagerDuty outbound integrations
-- [ ] Add CI pipeline
-- [ ] Add Docker support
-- [ ] Add deployment manifests
-- [ ] Add authentication and rate limiting improvements
+- [ ] Add PagerDuty/Slack outbound integrations
+- [ ] Add CI workflow and quality gates
+- [ ] Add screenshots / demo GIFs to the README
 
 ---
+
+## Additional docs
+
+- `docs/DEMO_STACK.md` — local demo walkthrough
+- `docs/PROJECT_REVIEW.md` — project analysis and next-step roadmap
 
 ## License
 
@@ -523,10 +424,4 @@ MIT
 
 ---
 
-## Notes
-
-This project is intentionally designed around a simple principle:
-
-> collect evidence first, correlate deterministically, and use AI only to refine the final response.
-
-That makes `sreagent` easier to test, reason about, and trust during incident response.
+**Core rule of the project:** collect evidence first, correlate deterministically, and use AI only to refine the final response.
