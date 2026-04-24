@@ -2,17 +2,97 @@
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/fastapi-api-009688)](https://fastapi.tiangolo.com/)
-[![Read-only](https://img.shields.io/badge/mode-read--only-critical)](#security-and-operational-notes)
-[![Observability Demo](https://img.shields.io/badge/demo-prometheus%20%2B%20loki%20%2B%20grafana-orange)](#run-the-full-local-demo-stack)
+[![Read-only](https://img.shields.io/badge/mode-read--only-critical)](#security-notes)
+[![Observability Demo](https://img.shields.io/badge/demo-prometheus%20%2B%20loki%20%2B%20grafana-orange)](#demo-flow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 Read-only SRE incident copilot built with Python + FastAPI.
 
-SREAgent receives alerts, correlates evidence from observability sources, produces an initial diagnosis, and formats a clear incident summary for chat surfaces like Telegram. The current local demo uses **Prometheus + Alertmanager + Loki + Grafana** with a fake service that emits both metrics and structured application logs.
+SREAgent receives alerts, collects evidence from Prometheus, Loki and workload metadata, correlates signals, produces a probable diagnosis, and formats an operational PT-BR summary for humans. The LLM is optional and advisory only. It refines wording and hypotheses, but it does not replace observable evidence.
 
----
+## Why This Project Exists
 
-## Demo in 2 minutes
+Many incident demos only paraphrase alert text.
+
+SREAgent is intentionally different:
+
+- it is read-only by design
+- it keeps evidence collection deterministic
+- it queries real Prometheus and Loki signals in the local demo
+- it treats the LLM as advisory refinement, not source of truth
+- it separates collected evidence, probable hypothesis, information gaps, suggested next steps, and actions not executed
+
+## Features
+
+- Receive alerts through HTTP or Alertmanager webhook payloads
+- Query Prometheus service health signals
+- Query Loki application logs
+- Correlate evidence with scoring instead of a single last-write-wins rule
+- Produce a probable diagnosis with supporting evidence and information gaps
+- Generate read-only PT-BR operational summaries
+- Optionally deliver summaries to Telegram in background
+- Draft postmortems from the same evidence pipeline
+
+## Architecture
+
+```text
+Alert Input / Alertmanager
+          |
+          v
+  Normalization + Grouping
+          |
+          v
+      Enrichment
+    | Prometheus |
+    | Loki       |
+    | Workload   |
+          |
+          v
+ Evidence Scoring Correlation
+          |
+          v
+   Probable Diagnosis
+          |
+          v
+ Optional LLM Refinement
+          |
+          v
+ Read-only Summary + Notification Preview
+```
+
+## Repository Structure
+
+```text
+sreagent/
+├── app/
+│   ├── ai/
+│   ├── api/
+│   ├── core/
+│   ├── domain/
+│   ├── integrations/
+│   ├── notifications/
+│   ├── services/
+│   ├── dependencies.py
+│   └── main.py
+├── deploy/
+├── docs/
+├── tests/
+├── .env.example
+├── MANIFEST.in
+├── SECURITY.md
+└── README.md
+```
+
+## Security Notes
+
+- Never commit `.env`, `deploy/.env`, `deploy/secrets/*`, bot tokens, private URLs, or copied local secrets.
+- The source distribution excludes local secrets, virtualenvs, caches, workspace notes, and other machine-local files.
+- If a Telegram Bot Token was ever exposed, rotate it immediately with `@BotFather` before publishing or reusing the project.
+- `SREAGENT_READ_ONLY_MODE=true` is enforced at startup. The application refuses to run in non read-only mode.
+
+More detail: see [`SECURITY.md`](./SECURITY.md).
+
+## Demo In 2 Minutes
 
 ```bash
 git clone https://github.com/luanfellp/sreagent.git
@@ -26,402 +106,178 @@ bash deploy/test_incident.sh timeout
 ```
 
 What you get:
-- fake service emits **metrics + application logs**
+
+- fake service emits metrics and structured application logs
 - Prometheus evaluates alert rules
-- Alertmanager sends webhook to SREAgent
-- SREAgent queries **Prometheus + Loki**
-- result is formatted as a **PT-BR executive incident summary**
+- Alertmanager sends webhook payloads to SREAgent
+- SREAgent queries Prometheus and Loki
+- SREAgent returns a read-only incident assessment
+- Telegram delivery happens only if configured; the demo still works without it
 
----
+## Demo Flow
 
-## Why this project is different
+1. Start the local stack with Docker Compose.
+2. Trigger a scenario in the fake service.
+3. Prometheus evaluates alerts.
+4. Alertmanager sends grouped webhook payloads.
+5. SREAgent groups alerts by `service` / `environment` / `severity` / `status`.
+6. SREAgent collects evidence from Prometheus, Loki, and workload metadata.
+7. Correlation scoring produces a primary hypothesis, confidence, secondary signals, and information gaps.
+8. The response highlights evidence collected, probable hypothesis, suggested next steps, and actions not executed.
+9. Telegram delivery is attempted only in background and only when configured.
 
-A lot of “AI for incidents” demos only summarize the alert text.
+Useful demo commands:
 
-This one tries to be more honest:
-- it is **read-only**
-- it uses **deterministic correlation first**
-- it queries **real Prometheus signals** in the demo
-- it queries **real application logs in Loki** in the demo
-- it keeps the LLM as an **advisory layer**, not the source of truth
-- it is designed to produce something a human on-call can actually use in the first minutes of an incident
-
----
-
-## What the project does today
-
-### API capabilities
-- Accept alerts through HTTP
-- Normalize and enrich incoming alert context
-- Query **Prometheus** for service health signals
-- Query **Loki** for recent **application logs**
-- Apply deterministic correlation rules
-- Infer probable component, failure type, and scope
-- Produce PT-BR executive summaries suitable for Telegram/WhatsApp
-- Draft postmortems from the same evidence pipeline
-- Optionally add an LLM refinement layer without replacing deterministic reasoning
-
-### Demo stack capabilities
-- Prometheus scraping a fake service and SREAgent metrics
-- Alertmanager forwarding alerts to SREAgent
-- Loki + Promtail ingesting structured application logs
-- Grafana dashboards for incidents, traffic, latency, and Telegram delivery
-- Fake incident scenarios:
-  - `high5xx`
-  - `timeout`
-  - `crashloop`
-  - `deploy_regression`
-  - `normal`
-
----
-
-## Screenshots / media to add
-
-Recommended assets for a stronger public repo page:
-- Grafana **Incident Workbench** screenshot
-- terminal run of `deploy/test_incident.sh timeout`
-- Telegram message screenshot with the final incident summary
-- short GIF showing: scenario trigger → alert → analysis → Telegram delivery
-
-Suggested filenames if you want to add them later:
-- `docs/media/grafana-incident-workbench.png`
-- `docs/media/telegram-incident-summary.png`
-- `docs/media/demo-flow.gif`
-
-Example markdown block for later:
-
-```md
-![Incident Workbench](docs/media/grafana-incident-workbench.png)
-![Telegram Incident Summary](docs/media/telegram-incident-summary.png)
+```bash
+curl -X POST 'http://localhost:8001/scenario?name=high5xx'
+curl -X POST 'http://localhost:8001/scenario?name=timeout'
+curl -X POST 'http://localhost:8001/scenario?name=crashloop'
+curl -X POST 'http://localhost:8001/scenario?name=deploy_regression'
+curl -X POST 'http://localhost:8001/scenario/reset'
 ```
 
----
-
-## Architecture
-
-```text
-Alert Input
-   ↓
-Normalization
-   ↓
-Enrichment
-   ├─ Prometheus service-health query
-   ├─ Loki application-log query
-   └─ Workload/demo context
-   ↓
-Deterministic correlation
-   ↓
-Diagnosis
-   ↓
-Optional LLM refinement
-   ↓
-PT-BR executive summary + notification preview
-```
-
-## Local demo flow
-
-```text
-Fake service
-  ├─ emits Prometheus metrics
-  └─ writes structured application logs
-        ↓
-Prometheus evaluates alert rules
-Promtail ships logs to Loki
-        ↓
-Alertmanager sends webhook to SREAgent
-        ↓
-SREAgent queries Prometheus + Loki
-        ↓
-SREAgent returns read-only incident analysis
-        ↓
-Optional Telegram delivery
-```
-
----
-
-## Stack
-
-### Application
-- Python 3.11+
-- FastAPI
-- Pydantic
-- Uvicorn
-- httpx
-- OpenAI Python SDK (optional)
-
-### Demo / observability
-- Prometheus
-- Alertmanager
-- Loki
-- Promtail
-- Grafana
-- Zabbix
-- Docker Compose
-
----
-
-## Repository structure
-
-```text
-sreagent/
-├── app/
-│   ├── ai/
-│   ├── api/
-│   ├── core/
-│   ├── domain/
-│   ├── integrations/
-│   ├── services/
-│   ├── dependencies.py
-│   └── main.py
-├── deploy/
-│   ├── alertmanager/
-│   ├── grafana/
-│   ├── metrics_generator/
-│   ├── prometheus/
-│   ├── promtail/
-│   └── docker-compose.local.yml
-├── docs/
-├── scripts/
-├── tests/
-└── README.md
-```
-
----
-
-## Endpoints
+## API Endpoints
 
 ### `GET /health`
+
 Basic health check.
 
 ### `GET /metrics`
+
 Prometheus metrics for the SREAgent service itself.
 
 ### `POST /alerts`
+
 Accepts a normalized alert payload and returns a structured incident assessment.
 
 ### `POST /alerts/alertmanager`
-Accepts Alertmanager webhook payloads and converts them into SREAgent internal alert input.
+
+Accepts Alertmanager webhook payloads, groups multiple alerts when needed, and returns a batch response with one result per grouped incident context.
 
 ### `POST /postmortems/draft`
-Builds a draft postmortem from alert input plus timeline context.
 
----
+Builds a read-only postmortem draft from alert input plus timeline context.
 
-## Example alert request
+## Read-only Output Contract
 
-```bash
-curl -X POST http://127.0.0.1:8000/alerts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": "grafana",
-    "severity": "critical",
-    "message": "Checkout latency is above threshold.",
-    "labels": {
-      "service": "checkout",
-      "environment": "prod"
-    }
-  }'
-```
+The output intentionally separates:
 
-If `SREAGENT_API_TOKEN` is configured, add:
+- evidence collected
+- primary hypothesis
+- secondary signals
+- information gaps
+- suggested next steps
+- actions not executed
 
-```bash
--H "X-API-Token: your-token"
-```
+This is deliberate. SREAgent must never imply that it executed remediation.
 
-## Example response shape
+## Telegram Delivery
 
-```json
-{
-  "mode": "read-only",
-  "status": "analyzed",
-  "title": "🟠 Incidente Alto em checkout",
-  "signals": {
-    "recent_deploy": false,
-    "dominant_error": "timeout",
-    "restart_detected": true,
-    "crashloop_detected": false
-  },
-  "evidence": [
-    {
-      "source": "prometheus",
-      "kind": "service-health"
-    },
-    {
-      "source": "loki",
-      "kind": "application-log-summary"
-    }
-  ],
-  "diagnosis": {
-    "probable_component": "checkout",
-    "probable_failure_type": "service-degradation",
-    "probable_scope": "single-service",
-    "confidence": "high"
-  },
-  "llm_analysis": {
-    "summary": "🧠 Análise inicial..."
-  }
-}
-```
+Telegram delivery is optional.
 
----
+- If `SREAGENT_TELEGRAM_CHAT_ID` and a bot token are not configured, the API still works.
+- Telegram delivery runs through a dedicated notification service and is scheduled in background.
+- Failures are logged and exposed as Prometheus counters.
+- The project protects itself from a feedback loop on `TelegramSendFailure` alerts.
 
-## Quick start
+## Configuration
 
-### 1. Clone and install
+Safe local application defaults live in `.env.example`.
+
+Demo stack environment defaults live in `deploy/.env.example`.
+
+Important variables:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `SREAGENT_READ_ONLY_MODE` | Enforces read-only startup guardrail | `true` |
+| `SREAGENT_API_TOKEN` | Optional API token for protected endpoints | unset |
+| `SREAGENT_ENABLE_LLM` | Enables advisory LLM refinement | `false` |
+| `SREAGENT_LLM_PROVIDER` | LLM provider name | `openai` |
+| `SREAGENT_OPENAI_API_KEY` | OpenAI key for advisory refinement | unset |
+| `SREAGENT_PROMETHEUS_URL` | Prometheus base URL | unset |
+| `SREAGENT_LOKI_URL` | Loki base URL | unset |
+| `SREAGENT_TELEGRAM_CHAT_ID` | Optional Telegram chat target | unset |
+| `SREAGENT_TELEGRAM_BOT_TOKEN` | Optional Telegram bot token | unset |
+| `SREAGENT_TELEGRAM_BOT_TOKEN_FILE` | Optional bot token file | unset |
+| `SREAGENT_ALERTMANAGER_EMIT_RESOLVED` | Returns explicit resolved webhook summaries instead of ignoring them | `false` |
+
+## Development
+
+Install dependencies:
 
 ```bash
-git clone https://github.com/luanfellp/sreagent.git
-cd sreagent
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 ```
 
-### 2. Run the API only
+Run lint and tests:
 
 ```bash
-uvicorn app.main:app --reload
+ruff check .
+pytest
+pytest -m e2e
 ```
 
-Available at:
-- `http://127.0.0.1:8000`
-- `http://127.0.0.1:8000/docs`
+## Validation Commands
 
----
-
-## Run the full local demo stack
-
-### 1. Prepare local env/secrets
+### Tests
 
 ```bash
-cp deploy/.env.example deploy/.env
-mkdir -p deploy/secrets
-printf 'your-telegram-bot-token' > deploy/secrets/telegram_bot_token.txt
+pytest
 ```
 
-If you do not want Telegram delivery, leave `SREAGENT_TELEGRAM_CHAT_ID` empty in `deploy/.env` and skip the token file.
+### Lint
 
-### 2. Start the stack
+```bash
+ruff check .
+```
+
+### Docker Compose
 
 ```bash
 docker compose -f deploy/docker-compose.local.yml up -d --build
+docker compose -f deploy/docker-compose.local.yml ps
 ```
 
-### 3. Trigger a scenario
-
-```bash
-curl -X POST 'http://localhost:8001/scenario?name=timeout'
-```
-
-### 4. Run the demo script
+### Alert Flow
 
 ```bash
 bash deploy/test_incident.sh timeout
+curl -s http://localhost:8002/health
+curl -s http://localhost:9093/api/v2/alerts
 ```
 
-### 5. Run all scenarios
+## Public Demo Packaging
+
+Generate a clean archive from git history only:
 
 ```bash
-bash deploy/run_demo_scenarios.sh
+git archive --format=zip --output=sreagent-clean.zip HEAD
 ```
 
----
+This avoids shipping `.git`, local `.env` files, secrets, caches, and workspace notes.
 
-## Grafana and demo services
+## Limitations
 
-- Grafana: `http://localhost:3000`
-- Prometheus: `http://localhost:9091`
-- Alertmanager: `http://localhost:9093`
-- Loki: `http://localhost:3100`
-- Fake service: `http://localhost:8001`
-- SREAgent: `http://localhost:8002`
-- Zabbix: `http://localhost:8080`
+- Kubernetes evidence is still mock-based unless a real provider is added.
+- Correlation is evidence-scored but still intentionally conservative.
+- Telegram delivery is a notification channel, not an incident system of record.
+- The LLM can refine wording and prioritization, but it must not be treated as verified root cause.
+- The demo includes Zabbix as part of the observability stack, but SREAgent does not yet query it directly.
 
-Recommended dashboard:
-- **Incident Workbench**
+## LLM Positioning
 
----
+The LLM is optional and advisory.
 
-## Configuration
+- deterministic evidence comes first
+- LLM output is sanitized against known evidence ids
+- unsupported or failing providers fall back to the mock provider
+- the system must still function without any LLM enabled
 
-### Core env vars
+## Related Docs
 
-| Variable | Description | Default |
-|---|---|---|
-| `SREAGENT_API_TOKEN` | Optional auth token for API endpoints | unset |
-| `SREAGENT_READ_ONLY_MODE` | Keeps the service in read-only posture | `true` |
-| `SREAGENT_ENABLE_LLM` | Enables optional LLM refinement | `false` |
-| `SREAGENT_LLM_PROVIDER` | LLM provider identifier | `openai` |
-| `SREAGENT_OPENAI_API_KEY` | OpenAI API key | unset |
-| `SREAGENT_OPENAI_MODEL` | OpenAI model name | `gpt-5` |
-| `SREAGENT_LLM_TIMEOUT_SECONDS` | Timeout for LLM requests | `15` |
-| `SREAGENT_PROMETHEUS_URL` | Prometheus base URL | unset |
-| `SREAGENT_PROMETHEUS_P95_METRIC` | Histogram metric base name used for p95 | `http_request_duration_seconds` |
-| `SREAGENT_LOKI_URL` | Loki base URL | unset |
-| `SREAGENT_TELEGRAM_CHAT_ID` | Optional Telegram target chat | unset |
-| `SREAGENT_TELEGRAM_BOT_TOKEN_FILE` | Path to local Telegram bot token file | unset |
-
----
-
-## Testing
-
-### Unit/integration tests
-
-```bash
-pytest -q tests
-```
-
-### E2E Alertmanager webhook smoke test
-
-```bash
-pytest -q tests/e2e/test_alertmanager_to_agent.py
-```
-
----
-
-## Security and operational notes
-
-- **Read-only by design**: no remediation or infra mutation
-- **Secrets must stay local**: use `deploy/.env` and `deploy/secrets/`
-- **LLM is advisory only**: deterministic evidence remains the source of truth
-- **Kubernetes evidence is still demo-level**: no real cluster provider is wired yet
-- **Telegram delivery is optional** and should never require secrets committed to Git
-
----
-
-## Current status
-
-This project is no longer just a bare API skeleton. It now has a usable local observability demo with:
-- real Prometheus queries
-- real Loki log lookups
-- structured PT-BR incident summaries
-- Telegram-ready output
-- end-to-end incident scenarios for demos and portfolio usage
-
----
-
-## Roadmap
-
-- [ ] Add richer multi-service correlation
-- [ ] Add real Kubernetes integration
-- [ ] Improve diagnosis confidence scoring
-- [ ] Store incident history
-- [ ] Add PagerDuty/Slack outbound integrations
-- [ ] Add CI workflow and quality gates
-- [ ] Add screenshots / demo GIFs to the README
-
----
-
-## Additional docs
-
-- `docs/DEMO_STACK.md` — local demo walkthrough
-- `docs/PROJECT_REVIEW.md` — project analysis and next-step roadmap
-
-## License
-
-MIT
-
----
-
-**Core rule of the project:** collect evidence first, correlate deterministically, and use AI only to refine the final response.
+- [`SECURITY.md`](./SECURITY.md)
+- [`docs/DEMO_STACK.md`](./docs/DEMO_STACK.md)
+- [`docs/PROJECT_REVIEW.md`](./docs/PROJECT_REVIEW.md)

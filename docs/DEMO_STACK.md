@@ -1,76 +1,79 @@
-# Demo stack local
+# Demo Stack
 
-## O que sobe
-- **SREAgent** em `http://localhost:8002`
-- **Grafana** em `http://localhost:3000`
-- **Prometheus** em `http://localhost:9091`
-- **Alertmanager** em `http://localhost:9093`
-- **Loki** em `http://localhost:3100`
-- **Fake API / metrics generator** em `http://localhost:8001`
-- **Zabbix** em `http://localhost:8080`
+## Services
 
-## Subir a stack
-Antes do primeiro `up`, copie o arquivo de exemplo:
+- `SREAgent`: `http://localhost:8002`
+- `Grafana`: `http://localhost:3000`
+- `Prometheus`: `http://localhost:9091`
+- `Alertmanager`: `http://localhost:9093`
+- `Loki`: `http://localhost:3100`
+- `Fake API / metrics generator`: `http://localhost:8001`
+- `Zabbix`: `http://localhost:8080`
+
+## Start the stack
+
 ```bash
 cp deploy/.env.example deploy/.env
-```
-
-Depois suba a stack:
-```bash
 docker compose -f deploy/docker-compose.local.yml up -d --build
 ```
 
-## Cenários disponíveis
-O fake service suporta estes cenários:
+Telegram is optional. If `SREAGENT_TELEGRAM_CHAT_ID` is empty, the demo still works and the API still returns notification previews.
+
+## Available scenarios
+
 - `normal`
 - `high5xx`
 - `timeout`
 - `crashloop`
 - `deploy_regression`
 
-## Ativar um cenário manualmente
+## Trigger a scenario
+
 ```bash
 curl -X POST 'http://localhost:8001/scenario?name=timeout'
 ```
 
-## Resetar para normal
+## Reset to normal
+
 ```bash
 curl -X POST 'http://localhost:8001/scenario/reset'
 ```
 
-## Rodar um incidente de demonstração
+## Run a demo incident
+
 ```bash
 bash deploy/test_incident.sh timeout
 ```
 
-## Rodar a bateria de cenários
+## Run all demo scenarios
+
 ```bash
 bash deploy/run_demo_scenarios.sh
 ```
 
-## Fluxo da análise inicial
-1. O fake service escreve **logs reais da aplicação** em `/var/log/demo/checkout-app.log`.
-2. O Promtail coleta esses logs e envia para o Loki com labels como `service`, `environment` e `log_source=application`.
-3. O Prometheus avalia as regras de erro, latência, restart e deploy.
-4. O Alertmanager envia o webhook para o SREAgent.
-5. O SREAgent consulta **Prometheus + Loki** antes de montar a análise inicial.
-6. O resumo final inclui um bloco explícito de **logs da aplicação** com evidência recente.
-7. O resumo é enviado para o Telegram configurado.
+## Demo flow
 
-## Dashboard sugerido
-No Grafana, abra:
-- **Incident Workbench**
+1. The fake service writes real application logs to `/var/log/demo/checkout-app.log`.
+2. Promtail ships those logs to Loki with labels such as `service`, `environment`, and `log_source=application`.
+3. Prometheus evaluates latency, 5xx, deploy, and restart rules.
+4. Alertmanager sends grouped webhook payloads to SREAgent.
+5. SREAgent groups alerts, queries Prometheus and Loki, and builds a read-only assessment.
+6. The response highlights evidence collected, probable hypothesis, information gaps, suggested next steps, and actions not executed.
+7. Telegram delivery is attempted only when configured and never blocks the API path.
 
-Esse dashboard mostra:
-- taxa de erro
-- latência p95
+## Suggested dashboard
+
+Open `Incident Workbench` in Grafana to present:
+
+- error rate
+- p95 latency
 - restart count
-- cenário ativo
-- logs recentes no Loki
+- active scenario
+- recent Loki logs
 
-## Observações
-- O projeto continua em **modo somente leitura**.
-- O Zabbix está incluído como parte da mini infra visual da demo.
-- A análise inicial usa evidências reais da demo para Prometheus e **logs da aplicação no Loki**.
-- Os segredos locais ficam em `deploy/secrets/` e não devem ir para o Git.
-- Sem provider real de Kubernetes, o agente usa apenas metadados do alerta para sinais de workload.
+## Notes
+
+- SREAgent remains strictly read-only.
+- Loki is fully integrated in the local demo stack.
+- Zabbix is part of the demo environment, but SREAgent does not query it directly yet.
+- Local secrets belong in `deploy/secrets/` and must never be committed.
