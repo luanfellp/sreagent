@@ -9,7 +9,6 @@ from app.domain.postmortem_models import (
 )
 from app.services.redaction import redact_text
 
-
 logger = logging.getLogger(__name__)
 
 

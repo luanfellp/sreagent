@@ -1,7 +1,6 @@
 from app.ai.base import BaseLLMProvider
 from app.domain.llm_models import LLMAnalysisResult, LLMIncidentContext
 
-
 SYSTEM_PROMPT = (
     "Voce e um assistente de analise de incidentes SRE. "
     "Use apenas as evidencias fornecidas. "

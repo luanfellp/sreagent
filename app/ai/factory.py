@@ -7,7 +7,6 @@ from app.ai.openai_provider import OpenAIProvider
 from app.core.logging_utils import log_event
 from app.core.settings import Settings
 
-
 logger = logging.getLogger(__name__)
 
 

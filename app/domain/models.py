@@ -4,7 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.llm_models import LLMAnalysisResult
 
-
 Severity = Literal["critical", "high", "medium", "low", "info"]
 
 
@@ -56,6 +55,9 @@ class EnrichmentSignals(BaseModel):
     dominant_error: str | None = None
     restart_detected: bool = False
     crashloop_detected: bool = False
+    high_error_rate: bool = False
+    latency_elevated: bool = False
+    relevant_logs_found: bool = True
 
 
 class EnrichedAlert(BaseModel):
@@ -68,12 +70,19 @@ class CorrelationDetails(BaseModel):
     dedup_key: str
     rule: str
     confidence: str
+    primary_hypothesis: str
+    supporting_evidence_ids: list[str] = Field(default_factory=list)
+    secondary_signals: list[str] = Field(default_factory=list)
+    information_gaps: list[str] = Field(default_factory=list)
 
 
 class Hypothesis(BaseModel):
+    kind: str = "generic"
     statement: str
     confidence: Literal["low", "medium", "high"]
+    score: int = Field(default=0, ge=0)
     evidence_ids: list[str] = Field(default_factory=list)
+    supporting_signals: list[str] = Field(default_factory=list)
 
 
 class CorrelationOutcome(BaseModel):
@@ -106,4 +115,15 @@ class AlertResponse(BaseModel):
     diagnosis: IncidentDiagnosis
     llm_analysis: LLMAnalysisResult
     actions: list[str]
+    non_executed_actions: list[str] = Field(default_factory=list)
     notifications: list[NotificationPreview]
+
+
+class AlertmanagerWebhookResponse(BaseModel):
+    mode: Literal["read-only"]
+    status: str
+    group_count: int
+    firing_groups: int
+    resolved_groups: int
+    ignored_groups: int
+    results: list[AlertResponse] = Field(default_factory=list)

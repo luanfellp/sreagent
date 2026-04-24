@@ -4,6 +4,7 @@ import urllib.parse
 
 import httpx
 
+from app.core.query_safety import build_label_matchers
 from app.integrations.models import LokiErrorSummary
 
 
@@ -46,9 +47,14 @@ class LokiHTTPClient:
         now = int(time.time())
         start = (now - 300) * 1_000_000_000
         end = now * 1_000_000_000
-        label_selector = (
-            f'{{service="{service}",environment="{environment}",log_source="application",level=~"warning|error|critical"}}'
+        labels = build_label_matchers(
+            {
+                "service": service,
+                "environment": environment,
+                "log_source": "application",
+            }
         )
+        label_selector = f'{{{labels},level=~"warning|error|critical"}}'
         query = label_selector
         encoded = urllib.parse.quote_plus(query)
         url = (

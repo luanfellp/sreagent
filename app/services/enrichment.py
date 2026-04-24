@@ -6,12 +6,12 @@ from app.domain.models import (
     NormalizedAlert,
 )
 from app.integrations.interfaces import KubernetesClient, LokiClient, PrometheusClient
+from app.integrations.mocks import mock_kubernetes, mock_loki, mock_prometheus
 from app.integrations.models import (
     KubernetesWorkloadStatus,
     LokiErrorSummary,
     PrometheusSnapshot,
 )
-from app.integrations.mocks import mock_kubernetes, mock_loki, mock_prometheus
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -185,6 +185,9 @@ def enrich_alert(
     restart_detected, crashloop_detected = _detect_restart_signals(
         alert.labels, kubernetes_workload_status
     )
+    high_error_rate = prometheus_snapshot.status in {"degraded", "critical"}
+    latency_elevated = (prometheus_snapshot.latency_p95_ms or 0) >= 700
+    relevant_logs_found = (loki_error_summary.error_count or 0) > 0
     deploy_minutes_ago = max(
         _parse_int(alert.labels.get("deploy_minutes_ago")),
         kubernetes_workload_status.deploy_minutes_ago or 0,
@@ -211,5 +214,8 @@ def enrich_alert(
         dominant_error=dominant_error,
         restart_detected=restart_detected,
         crashloop_detected=crashloop_detected,
+        high_error_rate=high_error_rate,
+        latency_elevated=latency_elevated,
+        relevant_logs_found=relevant_logs_found,
     )
     return EnrichedAlert(alert=normalized_alert, evidence=evidence, signals=signals)

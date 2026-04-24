@@ -6,7 +6,13 @@ from fastapi.responses import PlainTextResponse
 from app.api.alerts import router as alerts_router
 from app.api.postmortems import router as postmortems_router
 from app.core.settings import get_settings
-from app.dependencies import build_loki_client, build_prometheus_client, close_client
+from app.dependencies import (
+    build_loki_client,
+    build_prometheus_client,
+    build_telegram_notifier,
+    close_client,
+)
+from app.services.notification_service import NotificationService
 
 
 @asynccontextmanager
@@ -17,6 +23,9 @@ async def lifespan(app: FastAPI):
 
     app.state.prometheus_client = build_prometheus_client()
     app.state.loki_client = build_loki_client()
+    app.state.notification_service = NotificationService(
+        build_telegram_notifier(settings)
+    )
 
     try:
         yield
@@ -38,7 +47,7 @@ def create_app() -> FastAPI:
     @app.get("/metrics")
     def metrics() -> PlainTextResponse:
         # import lazily so the app can start even if prometheus_client is not installed yet
-        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
         data = generate_latest()
         return PlainTextResponse(content=data, media_type=CONTENT_TYPE_LATEST)
 

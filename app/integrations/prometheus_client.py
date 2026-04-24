@@ -3,6 +3,7 @@ from typing import Optional
 
 import httpx
 
+from app.core.query_safety import build_label_matchers
 from app.integrations.models import PrometheusSnapshot
 
 
@@ -27,7 +28,9 @@ class PrometheusHTTPClient:
             return 0.0
 
     def query_service_health(self, service: str, environment: str) -> PrometheusSnapshot:
-        labels = f'service="{service}",environment="{environment}"'
+        labels = build_label_matchers(
+            {"service": service, "environment": environment}
+        )
         err_expr = f'sum(rate(http_requests_total{{{labels},code=~"5.."}}[5m]))'
         tot_expr = f'sum(rate(http_requests_total{{{labels}}}[5m]))'
 

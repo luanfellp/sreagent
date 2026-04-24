@@ -15,7 +15,6 @@ from app.integrations.interfaces import KubernetesClient, LokiClient, Prometheus
 from app.services.incident_pipeline import analyze_alert
 from app.services.postmortem import build_postmortem_draft
 
-
 router = APIRouter(prefix="/postmortems", tags=["postmortems"])
 
 

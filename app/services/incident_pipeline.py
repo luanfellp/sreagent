@@ -9,8 +9,8 @@ from app.domain.llm_models import (
     LLMContextCorrelation,
     LLMContextEvidence,
     LLMContextHypothesis,
-    LLMIncidentContext,
     LLMContextSignals,
+    LLMIncidentContext,
 )
 from app.domain.models import AlertInput, CorrelationOutcome, EnrichedAlert
 from app.integrations.interfaces import KubernetesClient, LokiClient, PrometheusClient
@@ -19,7 +19,6 @@ from app.services.correlation import correlate_alert
 from app.services.diagnosis import diagnose_incident
 from app.services.enrichment import enrich_alert
 from app.services.redaction import redact_text, redact_value
-
 
 logger = logging.getLogger(__name__)
 

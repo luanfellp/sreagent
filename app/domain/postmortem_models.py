@@ -4,7 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.models import AlertInput, IncidentDiagnosis, NormalizedAlert
 
-
 TimelinePhase = Literal[
     "detected",
     "observed",

@@ -19,11 +19,13 @@ from app.integrations.mocks import (
     mock_prometheus,
     mock_slack,
 )
+from app.notifications.telegram import TelegramNotifier
+from app.services.notification_service import NotificationService
 
 # Import real HTTP clients if available
 try:
-    from app.integrations.prometheus_client import PrometheusHTTPClient
     from app.integrations.loki_client import LokiHTTPClient
+    from app.integrations.prometheus_client import PrometheusHTTPClient
     _integration_import_error: ImportError | None = None
 except ImportError as exc:
     PrometheusHTTPClient = None  # type: ignore
@@ -86,6 +88,25 @@ def get_kubernetes_client() -> KubernetesClient:
 
 def get_slack_client() -> SlackClient:
     return mock_slack
+
+
+def build_telegram_notifier(settings: Settings) -> TelegramNotifier:
+    return TelegramNotifier.from_settings(
+        chat_id=settings.telegram_chat_id,
+        bot_token=settings.telegram_bot_token,
+        bot_token_file=settings.telegram_bot_token_file,
+    )
+
+
+def get_notification_service(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NotificationService:
+    service = getattr(request.app.state, "notification_service", None)
+    if service is not None:
+        return service
+
+    return NotificationService(build_telegram_notifier(settings))
 
 
 def get_llm_provider(
