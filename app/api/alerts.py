@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from app.ai.base import BaseLLMProvider
 from app.core.settings import Settings, get_settings
 from app.dependencies import (
+    get_incident_store,
     get_kubernetes_client,
     get_llm_provider,
     get_loki_client,
@@ -32,6 +33,7 @@ from app.integrations.interfaces import (
 )
 from app.services.alertmanager import AlertmanagerGroupInput, build_grouped_alert_inputs
 from app.services.incident_pipeline import analyze_alert
+from app.services.incident_store import IncidentStore
 from app.services.notification_service import NotificationService
 from app.services.summarization import summarize_alert
 
@@ -184,6 +186,7 @@ def create_alert(
     notification_service: Annotated[
         NotificationService, Depends(get_notification_service)
     ],
+    incident_store: Annotated[IncidentStore, Depends(get_incident_store)],
 ) -> AlertResponse:
     incident = _analyze_alert(
         alert, llm_provider, prometheus_client, loki_client, kubernetes_client
@@ -195,6 +198,7 @@ def create_alert(
         labels=alert.labels,
         result=result,
     )
+    incident_store.add(result)
 
     return result
 
@@ -218,6 +222,7 @@ def create_alert_from_alertmanager(
     notification_service: Annotated[
         NotificationService, Depends(get_notification_service)
     ],
+    incident_store: Annotated[IncidentStore, Depends(get_incident_store)],
 ) -> AlertmanagerWebhookResponse:
     """
     Accept Alertmanager webhook payloads and process grouped alerts by
@@ -226,12 +231,12 @@ def create_alert_from_alertmanager(
     results: list[AlertResponse] = []
     for group in build_grouped_alert_inputs(payload):
         if group.status == "resolved":
-            results.append(
-                _build_resolved_response(
-                    group,
-                    emit_resolved=settings.alertmanager_emit_resolved,
-                )
+            result = _build_resolved_response(
+                group,
+                emit_resolved=settings.alertmanager_emit_resolved,
             )
+            results.append(result)
+            incident_store.add(result)
             continue
 
         incident = _analyze_alert(
@@ -243,6 +248,7 @@ def create_alert_from_alertmanager(
         )
         result = _summarize_alert(incident, notification_preview_builder)
         results.append(result)
+        incident_store.add(result)
         notification_service.schedule_alert_delivery(
             background_tasks,
             source=group.alert.source,

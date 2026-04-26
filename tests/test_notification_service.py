@@ -22,7 +22,7 @@ class _FakeNotifier:
         return True
 
 
-def _alert_response() -> AlertResponse:
+def _alert_response(channel: str = "telegram") -> AlertResponse:
     return AlertResponse(
         mode="read-only",
         status="analyzed",
@@ -62,7 +62,7 @@ def _alert_response() -> AlertResponse:
         ),
         actions=[],
         non_executed_actions=[],
-        notifications=[NotificationPreview(channel="telegram", message="mensagem")],
+        notifications=[NotificationPreview(channel=channel, message="mensagem")],
     )
 
 
@@ -95,3 +95,19 @@ def test_notification_service_skips_telegram_feedback_loop() -> None:
     )
 
     assert background_tasks.tasks == []
+
+
+def test_notification_service_schedules_whatsapp_when_enabled() -> None:
+    telegram = _FakeNotifier(enabled=False)
+    whatsapp = _FakeNotifier(enabled=True)
+    service = NotificationService(telegram, whatsapp)  # type: ignore[arg-type]
+    background_tasks = BackgroundTasks()
+
+    service.schedule_alert_delivery(
+        background_tasks,
+        source="grafana",
+        labels={},
+        result=_alert_response(channel="whatsapp"),
+    )
+
+    assert len(background_tasks.tasks) == 1

@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sreagent-readonly
+  namespace: sreagent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sreagent-readonly
+  namespace: sreagent
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sreagent-readonly
+  namespace: sreagent
+subjects:
+  - kind: ServiceAccount
+    name: sreagent-readonly
+    namespace: sreagent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sreagent-readonly

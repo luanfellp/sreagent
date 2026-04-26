@@ -15,7 +15,7 @@ SREAgent receives alerts, collects evidence from Prometheus, Loki and workload m
 - API: FastAPI
 - Runtime: Python 3.11+
 - Evidence sources: Prometheus, Loki, workload metadata
-- Delivery: structured API response and optional Telegram notification
+- Delivery: structured API response and optional Telegram / WhatsApp notification
 - Guardrail: enforced read-only mode at startup
 - Demo stack: Prometheus, Alertmanager, Loki, Promtail, Grafana, Zabbix, fake service
 
@@ -39,8 +39,10 @@ SREAgent is intentionally different:
 - Correlate evidence with scoring instead of a single last-write-wins rule
 - Produce a probable diagnosis with supporting evidence and information gaps
 - Generate read-only PT-BR operational summaries
-- Optionally deliver summaries to Telegram in background
+- Optionally deliver summaries to Telegram and WhatsApp in background
 - Draft postmortems from the same evidence pipeline
+- Keep a read-only in-memory history of recently processed incidents
+- Inspect recent incidents through a small built-in dashboard
 
 ## Architecture
 
@@ -121,7 +123,7 @@ What you get:
 - Alertmanager sends webhook payloads to SREAgent
 - SREAgent queries Prometheus and Loki
 - SREAgent returns a read-only incident assessment
-- Telegram delivery happens only if configured; the demo still works without it
+- Telegram and WhatsApp delivery happen only if configured; the demo still works without them
 
 ## Demo Flow
 
@@ -133,7 +135,7 @@ What you get:
 6. SREAgent collects evidence from Prometheus, Loki, and workload metadata.
 7. Correlation scoring produces a primary hypothesis, confidence, secondary signals, and information gaps.
 8. The response highlights evidence collected, probable hypothesis, suggested next steps, and actions not executed.
-9. Telegram delivery is attempted only in background and only when configured.
+9. Telegram or WhatsApp delivery is attempted only in background and only when configured.
 
 Useful demo commands:
 
@@ -166,6 +168,14 @@ Accepts Alertmanager webhook payloads, groups multiple alerts when needed, and r
 ### `POST /postmortems/draft`
 
 Builds a read-only postmortem draft from alert input plus timeline context.
+
+### `GET /incidents/recent`
+
+Returns recently processed incident responses from the in-memory read-only history.
+
+### `GET /dashboard`
+
+Serves a small operational dashboard for recent incidents. If `SREAGENT_API_TOKEN` is configured, enter the same token in the dashboard toolbar so the browser can call protected incident endpoints.
 
 ## Example Webhook Response
 
@@ -207,14 +217,33 @@ The output intentionally separates:
 
 This is deliberate. SREAgent must never imply that it executed remediation.
 
-## Telegram Delivery
+## Notification Delivery
 
-Telegram delivery is optional.
+Telegram and WhatsApp delivery are optional.
 
-- If `SREAGENT_TELEGRAM_CHAT_ID` and a bot token are not configured, the API still works.
-- Telegram delivery runs through a dedicated notification service and is scheduled in background.
+- If no notification destination and token are configured, the API still works.
+- Delivery runs through a dedicated notification service and is scheduled in background.
 - Failures are logged and exposed as Prometheus counters.
-- The project protects itself from a feedback loop on `TelegramSendFailure` alerts.
+- The project protects itself from feedback loops on `TelegramSendFailure` and `WhatsAppSendFailure` alerts.
+- Use `SREAGENT_NOTIFICATION_CHANNELS=telegram,whatsapp` to enable both channels.
+
+Minimal notification setup:
+
+```env
+SREAGENT_NOTIFICATION_CHANNELS=telegram,whatsapp
+SREAGENT_GRAFANA_URL=http://localhost:3000
+SREAGENT_ZABBIX_URL=http://localhost:8080
+
+SREAGENT_TELEGRAM_CHAT_ID=123456789
+SREAGENT_TELEGRAM_BOT_TOKEN_FILE=./secrets/telegram_bot_token.txt
+
+SREAGENT_WHATSAPP_PHONE_NUMBER_ID=1234567890
+SREAGENT_WHATSAPP_ACCESS_TOKEN=EAAG...
+SREAGENT_WHATSAPP_TO=5511999999999
+```
+
+For a full setup guide covering Prometheus, Grafana, Loki, Kubernetes, Zabbix,
+Telegram and WhatsApp, see [`docs/INTEGRATIONS.md`](./docs/INTEGRATIONS.md).
 
 ## Configuration
 
@@ -233,10 +262,29 @@ Important variables:
 | `SREAGENT_OPENAI_API_KEY` | OpenAI key for advisory refinement | unset |
 | `SREAGENT_PROMETHEUS_URL` | Prometheus base URL | unset |
 | `SREAGENT_LOKI_URL` | Loki base URL | unset |
+| `SREAGENT_GRAFANA_URL` | Optional Grafana link included in notifications | unset |
+| `SREAGENT_ZABBIX_URL` | Optional Zabbix link included in notifications | unset |
+| `SREAGENT_KUBERNETES_API_URL` | Optional Kubernetes API URL for read-only workload evidence | unset |
+| `SREAGENT_KUBERNETES_NAMESPACE` | Optional namespace override; otherwise environment is used as namespace | unset |
+| `SREAGENT_KUBERNETES_LABEL_KEY` | Label key used to find pods/deployments for a service | `app` |
+| `SREAGENT_KUBERNETES_TOKEN_FILE` | Optional ServiceAccount token file | in-cluster default |
+| `SREAGENT_KUBERNETES_CA_CERT_FILE` | Optional Kubernetes CA certificate file | in-cluster default |
+| `SREAGENT_INCIDENT_HISTORY_LIMIT` | Max number of recent incidents kept in memory | `100` |
+| `SREAGENT_NOTIFICATION_CHANNELS` | Comma-separated notification channels | `telegram` |
 | `SREAGENT_TELEGRAM_CHAT_ID` | Optional Telegram chat target | unset |
 | `SREAGENT_TELEGRAM_BOT_TOKEN` | Optional Telegram bot token | unset |
 | `SREAGENT_TELEGRAM_BOT_TOKEN_FILE` | Optional bot token file | unset |
+| `SREAGENT_WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Cloud API phone number id | unset |
+| `SREAGENT_WHATSAPP_ACCESS_TOKEN` | WhatsApp Cloud API access token | unset |
+| `SREAGENT_WHATSAPP_ACCESS_TOKEN_FILE` | Optional WhatsApp access token file | unset |
+| `SREAGENT_WHATSAPP_TO` | WhatsApp destination number in international format, without `+` | unset |
 | `SREAGENT_ALERTMANAGER_EMIT_RESOLVED` | Returns explicit resolved webhook summaries instead of ignoring them | `false` |
+
+### Kubernetes Read-only Evidence
+
+When `SREAGENT_KUBERNETES_API_URL` is configured, or when SREAgent runs inside a Kubernetes cluster with `KUBERNETES_SERVICE_HOST` available, the app queries pods and deployments with read-only `GET` requests. If no Kubernetes API is configured, it falls back to the mock provider used by the local demo.
+
+The client looks for workloads by label, using `SREAGENT_KUBERNETES_LABEL_KEY=app` by default. For example, service `checkout` maps to `app=checkout`. Use [`deploy/kubernetes/sreagent-readonly-rbac.yml`](./deploy/kubernetes/sreagent-readonly-rbac.yml) as a starting point for a ServiceAccount that can only read pods and deployments.
 
 ## Development
 
@@ -306,9 +354,9 @@ Before showing the project publicly:
 
 ## Limitations
 
-- Kubernetes evidence is still mock-based unless a real provider is added.
+- Kubernetes evidence is read-only when configured, and mock-backed in the local demo.
 - Correlation is evidence-scored but still intentionally conservative.
-- Telegram delivery is a notification channel, not an incident system of record.
+- Telegram and WhatsApp delivery are notification channels, not an incident system of record.
 - The LLM can refine wording and prioritization, but it must not be treated as verified root cause.
 - The demo includes Zabbix as part of the observability stack, but SREAgent does not yet query it directly.
 
@@ -325,4 +373,5 @@ The LLM is optional and advisory.
 
 - [`SECURITY.md`](./SECURITY.md)
 - [`docs/DEMO_STACK.md`](./docs/DEMO_STACK.md)
+- [`docs/INTEGRATIONS.md`](./docs/INTEGRATIONS.md)
 - [`docs/PROJECT_REVIEW.md`](./docs/PROJECT_REVIEW.md)
