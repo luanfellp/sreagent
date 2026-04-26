@@ -17,6 +17,9 @@ class LLMContextSignals(BaseModel):
     dominant_error: str | None = None
     restart_detected: bool = False
     crashloop_detected: bool = False
+    high_error_rate: bool = False
+    latency_elevated: bool = False
+    relevant_logs_found: bool = False
 
 
 class LLMContextCorrelation(BaseModel):

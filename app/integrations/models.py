@@ -35,5 +35,5 @@ class KubernetesWorkloadStatus(BaseModel):
 
 
 class NotificationMessagePreview(BaseModel):
-    channel: Literal["telegram"]
+    channel: Literal["telegram", "whatsapp"]
     message: str

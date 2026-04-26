@@ -8,10 +8,16 @@ from app.integrations.models import PrometheusSnapshot
 
 
 class PrometheusHTTPClient:
-    def __init__(self, base_url: str, p95_metric: Optional[str] = None, timeout: float = 5.0):
+    def __init__(
+        self,
+        base_url: str,
+        p95_metric: Optional[str] = None,
+        timeout: float = 5.0,
+        transport: httpx.BaseTransport | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.p95_metric = p95_metric
-        self._client = httpx.Client(timeout=timeout)
+        self._client = httpx.Client(timeout=timeout, transport=transport)
 
     def close(self) -> None:
         self._client.close()
@@ -34,8 +40,21 @@ class PrometheusHTTPClient:
         err_expr = f'sum(rate(http_requests_total{{{labels},code=~"5.."}}[5m]))'
         tot_expr = f'sum(rate(http_requests_total{{{labels}}}[5m]))'
 
-        err = self._query(err_expr)
-        tot = self._query(tot_expr)
+        metric_name = self.p95_metric or "http_request_duration_seconds"
+        try:
+            err = self._query(err_expr)
+            tot = self._query(tot_expr)
+        except Exception as exc:
+            return PrometheusSnapshot(
+                service=service,
+                environment=environment,
+                metric_name=metric_name,
+                status="ok",
+                summary=(
+                    f"Falha ao consultar Prometheus para {service} em {environment}: {exc}"
+                ),
+            )
+
         error_rate_per_min = None
         percent = 0.0
         if tot > 0:
@@ -49,7 +68,6 @@ class PrometheusHTTPClient:
             status = "degraded"
 
         latency_p95 = None
-        metric_name = self.p95_metric or "http_request_duration_seconds"
         try:
             p95_expr = (
                 f'histogram_quantile(0.95, sum(rate({metric_name}_bucket{{{labels}}}[5m])) by (le))'

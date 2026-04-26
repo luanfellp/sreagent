@@ -2,6 +2,7 @@ from app.domain.incident_models import IncidentContext
 from app.domain.models import AlertResponse, NotificationPreview
 from app.integrations.interfaces import NotificationPreviewBuilder
 from app.integrations.mocks import mock_notification_preview_builder
+from app.integrations.models import NotificationMessagePreview
 
 SEVERITY_EMOJI = {
     "critical": "🔴",
@@ -51,6 +52,21 @@ def _ordered_unique(items: list[str]) -> list[str]:
             ordered.append(item)
             seen.add(item)
     return ordered
+
+
+def _build_notification_previews(
+    notification_preview_builder: NotificationPreviewBuilder,
+    title: str,
+    summary: str,
+) -> list[NotificationMessagePreview]:
+    build_many = getattr(
+        notification_preview_builder,
+        "build_notification_previews",
+        None,
+    )
+    if callable(build_many):
+        return build_many(title, summary)
+    return [notification_preview_builder.build_notification_preview(title, summary)]
 
 
 def summarize_alert(
@@ -105,26 +121,51 @@ def summarize_alert(
     executive_lines = [
         title,
         "",
-        f"🧠 Resumo: {incident.llm_analysis.summary}",
-        f"🎯 Hipótese principal: {incident.correlation.primary_hypothesis}",
-        f"🪵 Logs da aplicação: {logs_line}",
-        f"📚 Evidências principais: {', '.join(incident.correlation.supporting_evidence_ids) or 'nenhuma'}",
-        f"🎯 Diagnóstico: {failure_label} em {incident.diagnosis.probable_component}",
+        "🧠 Resumo:",
+        incident.llm_analysis.summary,
+        "",
+        "🎯 Hipótese principal:",
+        incident.correlation.primary_hypothesis,
+        "",
+        "📌 Contexto:",
+        f"Serviço: {incident.alert.service}",
+        f"Ambiente: {incident.alert.environment}",
+        f"Severidade: {severity_label}",
+        f"Fonte: {incident.alert.source}",
+        f"Dedup: {incident.correlation.dedup_key}",
+        "",
+        "📈 Diagnóstico:",
+        f"Tipo provável: {failure_label}",
+        f"Componente: {incident.diagnosis.probable_component}",
+        f"Escopo: {scope_label}",
         f"📈 Confiança: {confidence_label}",
-        f"🌍 Ambiente: {incident.alert.environment}",
-        f"🧭 Escopo: {scope_label}",
-        f"🧩 Regra: {incident.correlation.rule}",
-        f"🆔 Dedup: {incident.correlation.dedup_key}",
-        f"🔎 Sinais secundários: {', '.join(incident.correlation.secondary_signals) or 'nenhum'}",
-        f"❓ Lacunas: {', '.join(incident.correlation.information_gaps) or 'nenhuma'}",
-        f"⛔ Ações não executadas: {', '.join(non_executed_actions)}",
+        f"Regra: {incident.correlation.rule}",
+        "",
+        "📚 Evidências principais:",
+        f"{', '.join(incident.correlation.supporting_evidence_ids) or 'nenhuma'}",
+        "",
+        "🪵 Logs da aplicação:",
+        logs_line,
+        "",
+        "🔎 Sinais secundários:",
+        f"{', '.join(incident.correlation.secondary_signals) or 'nenhum'}",
+        "",
+        "❓ Lacunas:",
+        f"{', '.join(incident.correlation.information_gaps) or 'nenhuma'}",
         "",
         "➡️ Próximos passos:",
-        *[f"• {item}" for item in actions[:3]],
+        *[f"• {item}" for item in actions[:5]],
+        "",
+        "⛔ Ações não executadas:",
+        f"{', '.join(non_executed_actions)}",
     ]
     summary = "\n".join(executive_lines)
 
-    notification = notification_preview_builder.build_notification_preview(title, summary)
+    notifications = _build_notification_previews(
+        notification_preview_builder,
+        title,
+        summary,
+    )
     return AlertResponse(
         mode="read-only",
         status=status,
@@ -143,5 +184,6 @@ def summarize_alert(
                 channel=notification.channel,
                 message=notification.message,
             )
+            for notification in notifications
         ],
     )

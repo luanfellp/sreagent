@@ -99,7 +99,7 @@ class IncidentDiagnosis(BaseModel):
 
 
 class NotificationPreview(BaseModel):
-    channel: Literal["telegram"]
+    channel: Literal["telegram", "whatsapp"]
     message: str
 
 
